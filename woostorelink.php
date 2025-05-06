@@ -3,7 +3,7 @@
 Plugin Name: WooStoreLink
 Plugin URI: https://nocticraft.com/
 Description: Connects WooCommerce with your Minecraft server
-Version: 0.3.3
+Version: 0.3.7
 Author: MrDinoCarlos
 */
 
