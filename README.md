@@ -1,15 +1,26 @@
 === MinecraftStoreLink ===
+
 Contributors: mrdinocarlos
+
 Donate link: https://nocticraft.com
+
 Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
+
 Requires at least: 5.8
+
 Tested up to: 6.8
+
 Requires PHP: 7.4
+
 Stable tag: 1.0.13
+
 License: GPLv2 or later
+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
+
 Connect your WooCommerce store with a Minecraft server. Deliver in-game items when an order is completed, using a secure and customizable REST API.
+
 
 == Description ==
 
