@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.13
+Stable tag: 1.0.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,18 @@ The **Settings** page provides:
 3. Database rebuild and cache flush tools
 
 == Changelog ==
+
+= Version 1.0.14 =
+
++ Added REST API endpoints for /request-link and /verify-link.
++ Sends verification code to user's email to confirm Minecraft ↔ WordPress link.
++ Links are now stored securely as user_meta (minecraft_player) only after validation.
++ Locked profile fields: user display name, first name, and nickname now reflect Minecraft username once linked.
++ Added checkout-fields-page admin panel to choose which WooCommerce fields appear at checkout.
++ Automatically inserts Minecraft username into checkout form (read-only if linked).
++ Minecraft username now appears in WooCommerce emails and admin order view.
++ Improved REST delivery endpoints with token protection and response formatting.
+
 
 = 1.0.13 =
 * Fixed issue with infinite delivery loop.
