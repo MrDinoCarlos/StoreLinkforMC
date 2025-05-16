@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.14
+Stable tag: 1.0.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,18 @@ The **Settings** page provides:
 3. Database rebuild and cache flush tools
 
 == Changelog ==
+
+= Version 1.0.16 =
+
++ Added automatic WordPress role assignment when a Minecraft account is linked.
++ New admin page “Sync Roles” to:
+  + Select a default role for newly linked Minecraft accounts.
+  + Create custom WordPress roles directly from the plugin.
+  + Map WooCommerce products to specific roles (per-product role sync).
++ Roles are now removed if the user unlinks their Minecraft account.
++ Roles assigned by product purchase are now revoked if the order is cancelled, refunded, or fails.
++ Added [minecraftstorelink_account_sync] shortcode to display current Minecraft link status and unlink button (AJAX powered).
+
 
 = Version 1.0.14 =
 
