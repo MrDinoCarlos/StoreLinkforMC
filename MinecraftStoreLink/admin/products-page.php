@@ -14,18 +14,22 @@ function minecraftstorelink_add_products_submenu() {
 }
 
 function minecraftstorelink_products_page() {
+    if (!current_user_can('manage_woocommerce')) {
+        wp_die(__('You do not have sufficient permissions to access this page.'));
+    }
+
     if (!function_exists('wc_get_products')) {
-        echo '<div class="notice notice-error"><p>WooCommerce is not active.</p></div>';
+        echo '<div class="notice notice-error"><p>' . esc_html__('WooCommerce is not active.', 'minecraftstorelink') . '</p></div>';
         return;
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['minecraftstorelink_selected_products'])) {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['minecraftstorelink_selected_products'])) {
         check_admin_referer('minecraftstorelink_products_save');
 
         $product_ids = array_map('intval', (array) $_POST['minecraftstorelink_selected_products']);
         update_option('minecraftstorelink_sync_products', $product_ids);
 
-        echo '<div class="updated"><p>Products saved successfully.</p></div>';
+        echo '<div class="updated"><p>' . esc_html__('Products saved successfully.', 'minecraftstorelink') . '</p></div>';
     }
 
     $selected = get_option('minecraftstorelink_sync_products', []);
@@ -33,15 +37,15 @@ function minecraftstorelink_products_page() {
 
     ?>
     <div class="wrap">
-        <h1>Synced Products</h1>
+        <h1><?php esc_html_e('Synced Products', 'minecraftstorelink'); ?></h1>
         <form method="post">
             <?php wp_nonce_field('minecraftstorelink_products_save'); ?>
 
             <table class="widefat fixed striped">
                 <thead>
                     <tr>
-                        <th style="width: 60px;">Select</th>
-                        <th>Product Name</th>
+                        <th style="width: 60px;"><?php esc_html_e('Select', 'minecraftstorelink'); ?></th>
+                        <th><?php esc_html_e('Product Name', 'minecraftstorelink'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -51,7 +55,7 @@ function minecraftstorelink_products_page() {
                                 <input type="checkbox"
                                        name="minecraftstorelink_selected_products[]"
                                        value="<?php echo esc_attr($product->get_id()); ?>"
-                                       <?php checked(in_array($product->get_id(), $selected)); ?>>
+                                       <?php checked(in_array($product->get_id(), $selected, true)); ?>>
                             </td>
                             <td><?php echo esc_html($product->get_name()); ?></td>
                         </tr>
@@ -59,7 +63,7 @@ function minecraftstorelink_products_page() {
                 </tbody>
             </table>
 
-            <?php submit_button('Save Selection'); ?>
+            <?php submit_button(__('Save Selection', 'minecraftstorelink')); ?>
         </form>
     </div>
     <?php

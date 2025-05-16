@@ -3,7 +3,7 @@
 Plugin Name: MinecraftStoreLink
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.16
+Version: 1.0.17
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
@@ -30,7 +30,7 @@ function minecraftstorelink_create_pending_delivery($order_id) {
 
     global $wpdb;
     $user_id = $order->get_user_id();
-    $player_name = get_user_meta($user_id, 'minecraft_player', true);
+    $player_name = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
     if (empty($player_name)) return;
 
     $allowed_products = get_option('minecraftstorelink_sync_products', []);
@@ -50,8 +50,8 @@ function minecraftstorelink_create_pending_delivery($order_id) {
 
         if (!in_array($product_id, $allowed_products)) continue;
 
-        $product_name = strtolower($item->get_name());
-        $quantity = $item->get_quantity();
+        $product_name = sanitize_text_field(strtolower($item->get_name()));
+        $quantity = intval($item->get_quantity());
 
         $exists = $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries
@@ -87,7 +87,7 @@ function minecraftstorelink_remove_roles_for_order($order_id) {
     foreach ($order->get_items() as $item) {
         $product_id = $item->get_product_id();
         if (isset($product_roles[$product_id])) {
-            $role = $product_roles[$product_id];
+            $role = sanitize_text_field($product_roles[$product_id]);
             if (user_can($user_id, $role)) {
                 $user->remove_role($role);
             }
@@ -97,7 +97,7 @@ function minecraftstorelink_remove_roles_for_order($order_id) {
 
 // 📧 Mostrar username de Minecraft en emails
 add_filter('woocommerce_email_order_meta_fields', function ($fields, $sent_to_admin, $order) {
-    $player = get_user_meta($order->get_user_id(), 'minecraft_player', true);
+    $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
     if ($player) {
         $fields['minecraft_player'] = ['label' => 'Minecraft Username', 'value' => $player];
     }
@@ -106,7 +106,7 @@ add_filter('woocommerce_email_order_meta_fields', function ($fields, $sent_to_ad
 
 // 🧾 Mostrar en admin > pedidos
 add_action('woocommerce_admin_order_data_after_billing_address', function ($order) {
-    $player = get_user_meta($order->get_user_id(), 'minecraft_player', true);
+    $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
     if ($player) {
         echo '<p><strong>Minecraft Username:</strong> ' . esc_html($player) . '</p>';
     }
@@ -120,7 +120,7 @@ function minecraftstorelink_render_account_sync_page() {
     }
 
     $user_id = get_current_user_id();
-    $player = get_user_meta($user_id, 'minecraft_player', true);
+    $player = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
 
     ob_start(); ?>
     <div class="minecraftstorelink-sync-wrapper">
@@ -139,7 +139,7 @@ function minecraftstorelink_render_account_sync_page() {
             if (button) {
                 button.addEventListener("click", () => {
                     if (!confirm("Are you sure you want to unlink your Minecraft account?")) return;
-                    fetch("<?php echo admin_url('admin-ajax.php'); ?>", {
+                    fetch("<?php echo esc_url(admin_url('admin-ajax.php')); ?>", {
                         method: "POST",
                         headers: { "Content-Type": "application/x-www-form-urlencoded" },
                         body: "action=minecraftstorelink_unlink_account"

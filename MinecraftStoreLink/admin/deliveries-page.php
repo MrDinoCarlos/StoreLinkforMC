@@ -27,22 +27,11 @@ function minecraftstorelink_render_deliveries_page() {
 
     // 🔄 Limpieza de duplicados
     if (isset($_POST['cleanup_duplicates'])) {
-        $duplicates = $wpdb->get_results("
-            SELECT player, item, order_id, COUNT(*) as total
-            FROM $table
-            GROUP BY player, item, order_id
-            HAVING total > 1
-        ");
-
+        $duplicates = $wpdb->get_results("SELECT player, item, order_id, COUNT(*) as total FROM $table GROUP BY player, item, order_id HAVING total > 1");
         $total_removed = 0;
 
         foreach ($duplicates as $dup) {
-            $entries = $wpdb->get_results($wpdb->prepare("
-                SELECT id FROM $table
-                WHERE player = %s AND item = %s AND order_id = %d
-                ORDER BY id ASC
-            ", $dup->player, $dup->item, $dup->order_id));
-
+            $entries = $wpdb->get_results($wpdb->prepare("SELECT id FROM $table WHERE player = %s AND item = %s AND order_id = %d ORDER BY id ASC", $dup->player, $dup->item, $dup->order_id));
             $to_delete = array_slice($entries, 1);
             foreach ($to_delete as $entry) {
                 $wpdb->delete($table, ['id' => $entry->id]);
@@ -50,7 +39,7 @@ function minecraftstorelink_render_deliveries_page() {
             }
         }
 
-        echo '<div class="updated"><p>🧹 Deleted Duplicates: ' . $total_removed . '</p></div>';
+        echo '<div class="updated"><p>🧹 Deleted Duplicates: ' . esc_html($total_removed) . '</p></div>';
     }
 
     // 🧹 Borrar todas las entregas pendientes
@@ -61,9 +50,8 @@ function minecraftstorelink_render_deliveries_page() {
 
     // ✏️ Acciones por entrega
     if (
-        $_SERVER['REQUEST_METHOD'] === 'POST' &&
-        isset($_POST['_wpnonce']) &&
-        wp_verify_nonce($_POST['_wpnonce'], 'minecraftstorelink_manage_deliveries')
+        isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' &&
+        isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'minecraftstorelink_manage_deliveries')
     ) {
         $id = isset($_POST['delivery_id']) ? intval($_POST['delivery_id']) : 0;
 
@@ -78,8 +66,8 @@ function minecraftstorelink_render_deliveries_page() {
                 $wpdb->delete($table, ['id' => $id]);
                 echo '<div class="updated"><p>Deleted successfully.</p></div>';
             } elseif (isset($_POST['save_edit'])) {
-                $player = sanitize_text_field($_POST['player'] ?? '');
-                $item = sanitize_text_field($_POST['item'] ?? '');
+                $player = sanitize_text_field(wp_unslash($_POST['player'] ?? ''));
+                $item = sanitize_text_field(wp_unslash($_POST['item'] ?? ''));
                 $amount = max(1, intval($_POST['amount'] ?? 1));
 
                 $wpdb->update($table, [
@@ -93,7 +81,6 @@ function minecraftstorelink_render_deliveries_page() {
         }
     }
 
-    // Filtros
     $filter_status = sanitize_text_field($_POST['filter_status'] ?? 'all');
     $filter_player = sanitize_text_field($_POST['filter_player'] ?? '');
 
@@ -113,14 +100,12 @@ function minecraftstorelink_render_deliveries_page() {
 
     echo '<div class="wrap"><h1>Pending Deliveries</h1>';
 
-    // 🧹 Botones de acciones masivas
     echo '<form method="post" style="margin-bottom:15px; display:flex; gap:10px;">';
     wp_nonce_field('minecraftstorelink_manage_deliveries');
     echo '<input type="submit" name="clear_all_deliveries" class="button button-secondary" value="🗑️ Delete all Pending Deliveries" onclick="return confirm(\'Are you sure?\')">';
     echo '<input type="submit" name="cleanup_duplicates" class="button button-primary" value="🧹 Detect and delete duplicates">';
     echo '</form>';
 
-    // 💣 Botón de reset total
     echo '<form method="post" style="margin-bottom:15px;">';
     echo '<input type="hidden" name="confirm_reset" value="yes">';
     echo '<input type="submit" name="reset_database" class="button button-danger" style="background:#dc3232;color:white;" value="💣 Reset database (dangerous)" onclick="return confirm(\'⚠ This will delete ALL deliveries (pending and delivered). Continue?\')">';
@@ -128,8 +113,7 @@ function minecraftstorelink_render_deliveries_page() {
 
     echo '<form method="post" style="margin-bottom:15px; display:flex; gap:10px; align-items:end;">';
     wp_nonce_field('minecraftstorelink_manage_deliveries');
-    echo '
-        <label>Status:
+    echo '<label>Status:
             <select name="filter_status">
                 <option value="all"' . selected($filter_status, 'all', false) . '>All</option>
                 <option value="pending"' . selected($filter_status, 'pending', false) . '>Pending</option>

@@ -17,15 +17,18 @@ function minecraftstorelink_sync_roles_page() {
     }
 
     // Guardar datos si se envió el formulario
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        check_admin_referer('minecraftstorelink_sync_roles');
+
         if (isset($_POST['minecraftstorelink_selected_role'])) {
-            update_option('minecraftstorelink_default_linked_role', sanitize_text_field($_POST['minecraftstorelink_selected_role']));
+            $selected = sanitize_text_field(wp_unslash($_POST['minecraftstorelink_selected_role']));
+            update_option('minecraftstorelink_default_linked_role', $selected);
             echo '<div class="updated notice"><p>✅ Role selection saved.</p></div>';
         }
 
         if (!empty($_POST['minecraftstorelink_new_role_slug']) && !empty($_POST['minecraftstorelink_new_role_name'])) {
-            $slug = sanitize_key($_POST['minecraftstorelink_new_role_slug']);
-            $name = sanitize_text_field($_POST['minecraftstorelink_new_role_name']);
+            $slug = sanitize_key(wp_unslash($_POST['minecraftstorelink_new_role_slug']));
+            $name = sanitize_text_field(wp_unslash($_POST['minecraftstorelink_new_role_name']));
 
             if (!get_role($slug)) {
                 add_role($slug, $name);
@@ -39,7 +42,7 @@ function minecraftstorelink_sync_roles_page() {
         if (isset($_POST['minecraftstorelink_product_roles']) && is_array($_POST['minecraftstorelink_product_roles'])) {
             $map = [];
             foreach ($_POST['minecraftstorelink_product_roles'] as $product_id => $role) {
-                $role = sanitize_text_field($role);
+                $role = sanitize_text_field(wp_unslash($role));
                 if (!empty($role)) {
                     $map[intval($product_id)] = $role;
                 }
@@ -54,6 +57,8 @@ function minecraftstorelink_sync_roles_page() {
     <div class="wrap">
         <h1>Sync WordPress Roles with Minecraft Link</h1>
         <form method="post">
+            <?php wp_nonce_field('minecraftstorelink_sync_roles'); ?>
+
             <h2>Assign Role on Minecraft Link</h2>
             <table class="form-table">
                 <tr>
@@ -93,7 +98,7 @@ function minecraftstorelink_sync_roles_page() {
                         <tr>
                             <td><?php echo esc_html($product->get_name()); ?></td>
                             <td>
-                                <select name="minecraftstorelink_product_roles[<?php echo $product->get_id(); ?>]">
+                                <select name="minecraftstorelink_product_roles[<?php echo esc_attr($product->get_id()); ?>]">
                                     <option value="">— NONE —</option>
                                     <?php foreach ($all_roles as $slug => $details): ?>
                                         <option value="<?php echo esc_attr($slug); ?>" <?php selected($role_map[$product->get_id()] ?? '', $slug); ?>>
@@ -110,6 +115,5 @@ function minecraftstorelink_sync_roles_page() {
             <?php submit_button('Save All Role Settings'); ?>
         </form>
     </div>
-
     <?php
 }
