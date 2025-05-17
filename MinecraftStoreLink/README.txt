@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.17
+Stable tag: 1.0.18
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,15 @@ The **Settings** page provides:
 3. Database rebuild and cache flush tools
 
 == Changelog ==
+
+= Version 1.0.18 =
+
++ Improved security of all database queries using `$wpdb->prepare()` with proper placeholders.
++ Fixed WP Plugin Checker errors related to unescaped output and missing text domains.
++ Escaped all translatable strings with `esc_html__()` for secure output in admin pages.
++ Deliveries admin page now uses fully prepared SQL statements, eliminating potential SQL injection risks and ensuring full compatibility with WordPress coding standards.
++ Improved code structure for delivery filters (status and player) with safer and cleaner dynamic query building.
++ Minor UI polish on the Pending Deliveries admin table for clarity and consistency.
 
 = Version 1.0.16 =
 

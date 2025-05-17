@@ -82,21 +82,31 @@ function minecraftstorelink_render_deliveries_page() {
     }
 
     $filter_status = sanitize_text_field($_POST['filter_status'] ?? 'all');
-    $filter_player = sanitize_text_field($_POST['filter_player'] ?? '');
+	$filter_player = sanitize_text_field($_POST['filter_player'] ?? '');
 
-    $sql = "SELECT * FROM $table WHERE 1=1";
-    if ($filter_status === 'pending') {
-        $sql .= " AND delivered = 0";
-    } elseif ($filter_status === 'delivered') {
-        $sql .= " AND delivered = 1";
-    }
+	$where_clauses = ["1=1"];
+	$params = [];
 
-    if (!empty($filter_player)) {
-        $sql .= $wpdb->prepare(" AND player LIKE %s", '%' . $wpdb->esc_like($filter_player) . '%');
-    }
+	if ($filter_status === 'pending') {
+    	$where_clauses[] = "delivered = %d";
+    	$params[] = 0;
+	} elseif ($filter_status === 'delivered') {
+    	$where_clauses[] = "delivered = %d";
+    	$params[] = 1;
+	}
 
-    $sql .= " ORDER BY timestamp DESC";
-    $rows = $wpdb->get_results($sql);
+	if (!empty($filter_player)) {
+    	$where_clauses[] = "player LIKE %s";
+    	$params[] = '%' . $wpdb->esc_like($filter_player) . '%';
+	}
+
+	$where_sql = implode(' AND ', $where_clauses);
+	$rows = $wpdb->get_results(
+    	$wpdb->prepare(
+        	"SELECT * FROM $table WHERE $where_sql ORDER BY timestamp DESC",
+        	...$params
+    	)
+	);
 
     echo '<div class="wrap"><h1>Pending Deliveries</h1>';
 
