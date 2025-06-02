@@ -108,18 +108,6 @@ function storelinkformc_api_token_render() {
     echo '<button type="submit" name="rebuild_pending_table" class="button button-secondary" onclick="return confirm(\'Rebuild the table? This will ERASE current deliveries.\')">♻️ Rebuild Table</button>';
     echo '</form>';
 
-    echo '<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const tokenField = document.getElementById("api-token-field");
-        tokenField.addEventListener("click", function () {
-            navigator.clipboard.writeText(tokenField.value).then(() => {
-                alert("Token copied to clipboard!");
-            }).catch(() => {
-                alert("Failed to copy token.");
-            });
-        });
-    });
-    </script>';
 }
 
 function storelinkformc_options_page() {
@@ -135,4 +123,26 @@ function storelinkformc_options_page() {
         </form>
     </div>
     <?php
+}
+
+add_action('admin_enqueue_scripts', 'storelinkformc_enqueue_admin_scripts');
+function storelinkformc_enqueue_admin_scripts($hook) {
+    if ($hook !== 'toplevel_page_storelinkformc') return;
+
+    wp_register_script('storelinkformc-admin', '', [], null, true);
+    wp_enqueue_script('storelinkformc-admin');
+    wp_add_inline_script('storelinkformc-admin', "
+        document.addEventListener('DOMContentLoaded', function () {
+            const tokenField = document.getElementById('api-token-field');
+            if (tokenField) {
+                tokenField.addEventListener('click', function () {
+                    navigator.clipboard.writeText(tokenField.value).then(() => {
+                        alert('Token copied to clipboard!');
+                    }).catch(() => {
+                        alert('Failed to copy token.');
+                    });
+                });
+            }
+        });
+    ");
 }

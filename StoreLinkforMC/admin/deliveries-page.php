@@ -51,8 +51,11 @@ function storelinkformc_render_deliveries_page() {
     // ✏️ Acciones por entrega
     if (
         isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' &&
-        isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'storelinkformc_manage_deliveries')
+        isset($_POST['_wpnonce']) &&
+        wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'storelinkformc_manage_deliveries') &&
+        current_user_can('manage_woocommerce')
     ) {
+
         $id = isset($_POST['delivery_id']) ? intval($_POST['delivery_id']) : 0;
 
         if ($id > 0) {

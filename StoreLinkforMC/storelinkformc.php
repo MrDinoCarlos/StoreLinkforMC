@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.19
+Version: 1.0.20
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
@@ -143,7 +143,7 @@ function storelinkformc_render_account_sync_page() {
                    fetch("<?php echo esc_url(admin_url('admin-ajax.php')); ?>", {
                        method: "POST",
                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                       body: "action=storelinkformc_unlink_account&security=<?php echo wp_create_nonce('storelinkformc_unlink_action'); ?>"
+                       body: "action=storelinkformc_unlink_account&security=<?php echo esc_attr(wp_create_nonce('storelinkformc_unlink_action')); ?>"
                    }).then(res => res.json())
                      .then(data => {
                          alert(data.success ? "✅ Unlinked successfully!" : "❌ Failed to unlink.");

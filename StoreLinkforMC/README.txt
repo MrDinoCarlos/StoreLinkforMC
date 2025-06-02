@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.19
+Stable tag: 1.0.20
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,77 +60,21 @@ The **Settings** page provides:
 - 🧹 Flush WordPress object cache.
 - 🛠 Access recommendation for WP phpMyAdmin or Adminer for deeper inspection.
 
-== Screenshots ==
-
-1. API token settings page
-2. Delivery management table
-3. Database rebuild and cache flush tools
 
 == Changelog ==
 
-= Version 1.0.19 =
+= Version 1.0.20 =
 
-+ Renamed plugin to "StoreLink for Minecraft" to comply with WordPress trademark guidelines.
-+ Changed plugin slug to "storelinkformc" and updated plugin headers and function names accordingly.
-+ Added proper `permission_callback` checks to all REST API endpoints for improved security.
-+ Protected `/pending` and `/mark-delivered` endpoints using a token-based authentication system.
-+ Added nonce verification to AJAX unlink requests to prevent CSRF vulnerabilities.
-+ Blocked direct file access by adding `if ( ! defined( 'ABSPATH' ) ) exit;` to all executable PHP files.
-+ Updated Minecraft integration to include the API token in all REST calls (fetch + mark delivered).
-+ Improved handling of product delivery to prevent duplicate executions during sync.
-+ Enhanced error logging and response messages across API calls for better debugging.
-+ Improved fallback handling for language files when the selected locale is missing.
++ Replaced inline <script> tags with wp_enqueue_script and wp_add_inline_script for proper JS inclusion.
++ Added admin_enqueue_scripts hook to load inline JavaScript only on the correct settings page.
++ Escaped all dynamic data in echo statements using esc_html(), esc_attr(), and esc_url() where appropriate.
++ Added current_user_can() permission checks to admin actions in deliveries management.
++ Improved nonce validation by applying sanitize_text_field and wp_unslash before calling wp_verify_nonce().
++ Validated and sanitized all $_POST inputs using WordPress security best practices.
++ Ensured all sensitive POST actions in admin pages are properly protected from unauthorized access.
++ Verified REST API endpoints already include secure permission_callback logic and token checks.
++ Confirmed that all executable PHP files start with ABSPATH protection against direct access.
 
-
-= Version 1.0.18 =
-
-+ Improved security of all database queries using `$wpdb->prepare()` with proper placeholders.
-+ Fixed WP Plugin Checker errors related to unescaped output and missing text domains.
-+ Escaped all translatable strings with `esc_html__()` for secure output in admin pages.
-+ Deliveries admin page now uses fully prepared SQL statements, eliminating potential SQL injection risks and ensuring full compatibility with WordPress coding standards.
-+ Improved code structure for delivery filters (status and player) with safer and cleaner dynamic query building.
-+ Minor UI polish on the Pending Deliveries admin table for clarity and consistency.
-
-= Version 1.0.16 =
-
-+ Added automatic WordPress role assignment when a Minecraft account is linked.
-+ New admin page “Sync Roles” to:
-  + Select a default role for newly linked Minecraft accounts.
-  + Create custom WordPress roles directly from the plugin.
-  + Map WooCommerce products to specific roles (per-product role sync).
-+ Roles are now removed if the user unlinks their Minecraft account.
-+ Roles assigned by product purchase are now revoked if the order is cancelled, refunded, or fails.
-+ Added [storelinkformc_account_sync] shortcode to display current Minecraft link status and unlink button (AJAX powered).
-
-
-= Version 1.0.14 =
-
-+ Added REST API endpoints for /request-link and /verify-link.
-+ Sends verification code to user's email to confirm Minecraft ↔ WordPress link.
-+ Links are now stored securely as user_meta (minecraft_player) only after validation.
-+ Locked profile fields: user display name, first name, and nickname now reflect Minecraft username once linked.
-+ Added checkout-fields-page admin panel to choose which WooCommerce fields appear at checkout.
-+ Automatically inserts Minecraft username into checkout form (read-only if linked).
-+ Minecraft username now appears in WooCommerce emails and admin order view.
-+ Improved REST delivery endpoints with token protection and response formatting.
-
-
-= 1.0.13 =
-* Fixed issue with infinite delivery loop.
-* Added protection for duplicated entries.
-* Added tools to inspect and rebuild the delivery table.
-* Improved compatibility with caching plugins.
-* Added admin notices and debug options.
-
-= 0.5.0 =
-* Initial public release.
-* Secure REST API for Minecraft integration.
-* Basic delivery management interface.
-
-== Upgrade Notice ==
-
-= 1.0.13 =
-Security, reliability and toolset update. Strongly recommended for all users.
 
 == License ==
 
