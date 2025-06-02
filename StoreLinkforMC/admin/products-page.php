@@ -23,14 +23,18 @@ function storelinkformc_products_page() {
         return;
     }
 
-    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['storelinkformc_selected_products'])) {
-        check_admin_referer('storelinkformc_products_save');
-
+    if (
+        isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' &&
+        isset($_POST['storelinkformc_selected_products']) &&
+        isset($_POST['_wpnonce']) &&
+        wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'storelinkformc_products_save')
+    ) {
         $product_ids = array_map('intval', (array) $_POST['storelinkformc_selected_products']);
         update_option('storelinkformc_sync_products', $product_ids);
 
         echo '<div class="updated"><p>' . esc_html__('Products saved successfully.', 'storelinkformc') . '</p></div>';
     }
+
 
     $selected = get_option('storelinkformc_sync_products', []);
     $products = wc_get_products(['limit' => -1]);
@@ -68,3 +72,16 @@ function storelinkformc_products_page() {
     </div>
     <?php
 }
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ($hook !== 'storelinkformc_page_storelinkformc_products') return;
+
+    wp_register_script(
+        'storelinkformc-products',
+        plugins_url('../assets/js/products.js', __FILE__),
+        [],
+        '1.0.0',
+        true
+    );
+    wp_enqueue_script('storelinkformc-products');
+});

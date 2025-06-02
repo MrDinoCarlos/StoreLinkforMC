@@ -50,11 +50,15 @@ function storelinkformc_settings_init() {
 }
 
 function storelinkformc_api_token_render() {
+    $regenerate = isset($_POST['regenerate_token']) ? sanitize_text_field(wp_unslash($_POST['regenerate_token'])) : '';
+
     if (
-        isset($_POST['regenerate_token']) &&
+        $regenerate &&
         check_admin_referer('storelinkformc_token_action', 'storelinkformc_token_nonce') &&
         current_user_can('manage_options')
-    ) {
+    )
+
+    {
         $new_token = wp_generate_password(32, false);
         update_option('storelinkformc_api_token', $new_token);
         echo '<div class="updated"><p><strong>Token regenerated successfully.</strong></p></div>';
@@ -105,7 +109,7 @@ function storelinkformc_api_token_render() {
 
     echo '<form method="post" style="margin-top:10px;">';
     wp_nonce_field('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce');
-    echo '<button type="submit" name="rebuild_pending_table" class="button button-secondary" onclick="return confirm(\'Rebuild the table? This will ERASE current deliveries.\')">♻️ Rebuild Table</button>';
+    echo '<button type="submit" name="rebuild_pending_table" class="button button-secondary">♻️ Rebuild Table</button>';
     echo '</form>';
 
 }
@@ -129,20 +133,19 @@ add_action('admin_enqueue_scripts', 'storelinkformc_enqueue_admin_scripts');
 function storelinkformc_enqueue_admin_scripts($hook) {
     if ($hook !== 'toplevel_page_storelinkformc') return;
 
-    wp_register_script('storelinkformc-admin', '', [], null, true);
+    wp_register_script(
+        'storelinkformc-admin',
+        plugins_url('assets/js/admin.js', dirname(__FILE__)),
+        [],
+        '1.0.0',
+        true
+    );
     wp_enqueue_script('storelinkformc-admin');
-    wp_add_inline_script('storelinkformc-admin', "
-        document.addEventListener('DOMContentLoaded', function () {
-            const tokenField = document.getElementById('api-token-field');
-            if (tokenField) {
-                tokenField.addEventListener('click', function () {
-                    navigator.clipboard.writeText(tokenField.value).then(() => {
-                        alert('Token copied to clipboard!');
-                    }).catch(() => {
-                        alert('Failed to copy token.');
-                    });
-                });
-            }
-        });
-    ");
 }
+add_filter('script_loader_tag', function ($tag, $handle, $src) {
+    if ($handle === 'storelinkformc-admin') {
+        return str_replace('<script', '<script defer', $tag);
+    }
+    return $tag;
+}, 10, 3);
+

@@ -5,20 +5,43 @@ if (!defined('ABSPATH')) exit;
 add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/request-link', [
         'methods' => 'POST',
-        'callback' => 'storelinkformc_request_link',
-        'permission_callback' => '__return_true'
+        'callback' => function ($request) {
+            $email  = sanitize_email($request->get_param('email'));
+            $player = sanitize_user($request->get_param('player'));
 
+            // Rate limiting per IP
+            $ip_key = 'storelinkformc_rate_' . md5($_SERVER['REMOTE_ADDR']);
+            if (get_transient($ip_key)) {
+                return new WP_REST_Response(['error' => 'Please wait before requesting another code.'], 429);
+            }
+            set_transient($ip_key, true, 60); // 1 request/minute
 
+            // Token verification
+            $token = sanitize_text_field($request->get_param('token'));
+            $stored_token = get_option('storelinkformc_api_token');
+            if ($token !== $stored_token) {
+                return new WP_REST_Response(['error' => 'Invalid token'], 403);
+            }
+
+            return storelinkformc_request_link($request);
+        },
+        'permission_callback' => '__return_true' // Handled inside callback
     ]);
 
     register_rest_route('storelinkformc/v1', '/verify-link', [
         'methods' => 'POST',
-        'callback' => 'storelinkformc_verify_link',
+        'callback' => function ($request) {
+            $token = sanitize_text_field($request->get_param('token'));
+            $stored_token = get_option('storelinkformc_api_token');
+            if ($token !== $stored_token) {
+                return new WP_REST_Response(['error' => 'Invalid token'], 403);
+            }
+            return storelinkformc_verify_link($request);
+        },
         'permission_callback' => '__return_true'
-
-
     ]);
 });
+
 
 // 🔐 Enviar código de verificación
 function storelinkformc_request_link($request) {
@@ -115,9 +138,12 @@ add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/pending', [
         'methods' => 'GET',
         'callback' => 'storelinkformc_api_get_pending',
-        'permission_callback' => function () {
-            return isset($_GET['token']) && sanitize_text_field($_GET['token']) === get_option('storelinkformc_api_token');
-        },
+        'permission_callback' => function ($request) {
+            $token = sanitize_text_field($request->get_param('token'));
+            $stored_token = get_option('storelinkformc_api_token');
+            return $token === $stored_token;
+        }
+
     ]);
 });
 
@@ -148,9 +174,12 @@ add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/mark-delivered', [
         'methods' => 'POST',
         'callback' => 'storelinkformc_api_mark_delivered',
-        'permission_callback' => function () {
-            return isset($_POST['token']) && sanitize_text_field($_POST['token']) === get_option('storelinkformc_api_token');
-        },
+        'permission_callback' => function ($request) {
+            $token = sanitize_text_field($request->get_param('token'));
+            $stored_token = get_option('storelinkformc_api_token');
+            return $token === $stored_token;
+        }
+
     ]);
 });
 

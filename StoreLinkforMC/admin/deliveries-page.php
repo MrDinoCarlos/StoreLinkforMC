@@ -84,8 +84,9 @@ function storelinkformc_render_deliveries_page() {
         }
     }
 
-    $filter_status = sanitize_text_field($_POST['filter_status'] ?? 'all');
-	$filter_player = sanitize_text_field($_POST['filter_player'] ?? '');
+    $filter_status = sanitize_text_field(wp_unslash($_POST['filter_status'] ?? 'all'));
+    $filter_player = sanitize_text_field(wp_unslash($_POST['filter_player'] ?? ''));
+
 
 	$where_clauses = ["1=1"];
 	$params = [];
@@ -115,13 +116,15 @@ function storelinkformc_render_deliveries_page() {
 
     echo '<form method="post" style="margin-bottom:15px; display:flex; gap:10px;">';
     wp_nonce_field('storelinkformc_manage_deliveries');
-    echo '<input type="submit" name="clear_all_deliveries" class="button button-secondary" value="🗑️ Delete all Pending Deliveries" onclick="return confirm(\'Are you sure?\')">';
+    echo '<input type="submit" name="clear_all_deliveries" class="button button-secondary" value="🗑️ Delete all Pending Deliveries">';
     echo '<input type="submit" name="cleanup_duplicates" class="button button-primary" value="🧹 Detect and delete duplicates">';
     echo '</form>';
 
     echo '<form method="post" style="margin-bottom:15px;">';
+    wp_nonce_field('storelinkformc_manage_deliveries');
+
     echo '<input type="hidden" name="confirm_reset" value="yes">';
-    echo '<input type="submit" name="reset_database" class="button button-danger" style="background:#dc3232;color:white;" value="💣 Reset database (dangerous)" onclick="return confirm(\'⚠ This will delete ALL deliveries (pending and delivered). Continue?\')">';
+    echo '<input type="submit" name="reset_database" class="button button-danger" value="💣 Reset database">';
     echo '</form>';
 
     echo '<form method="post" style="margin-bottom:15px; display:flex; gap:10px; align-items:end;">';
@@ -168,11 +171,11 @@ function storelinkformc_render_deliveries_page() {
 
         if ($isEditing) {
             echo '<button class="button button-primary" name="save_edit">Save</button> ';
-            echo '<button class="button" onclick="window.location.href=window.location.href; return false;">Cancel</button>';
+            echo '<button type="button" class="button" onclick="window.location.href=window.location.href;">Cancel</button>';
+
         } else {
             echo '<button class="button" name="edit_delivery" value="' . esc_attr($id) . '">✏ Edit</button> ';
             echo '<button class="button" name="' . ($row->delivered ? 'mark_undelivered' : 'mark_delivered') . '">' . ($row->delivered ? '❌ Unmark' : '✔ Mark') . '</button> ';
-            echo '<button class="button button-secondary" name="delete_delivery" onclick="return confirm(\'Delete this delivery?\')">🗑 Delete</button>';
         }
 
         echo '</td></form></tr>';
@@ -180,3 +183,16 @@ function storelinkformc_render_deliveries_page() {
 
     echo '</tbody></table></div>';
 }
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ($hook !== 'storelinkformc_page_storelinkformc_deliveries') return;
+
+    wp_register_script(
+        'storelinkformc-deliveries',
+        plugins_url('../assets/js/deliveries.js', __FILE__),
+        [],
+        '1.0.0',
+        true
+    );
+    wp_enqueue_script('storelinkformc-deliveries');
+});

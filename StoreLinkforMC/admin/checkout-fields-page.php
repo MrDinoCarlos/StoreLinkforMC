@@ -14,8 +14,11 @@ add_action('admin_menu', function () {
 function storelinkformc_checkout_fields_page() {
     if (
         isset($_POST['storelinkformc_checkout_fields_nonce']) &&
-        wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['storelinkformc_checkout_fields_nonce'])), 'storelinkformc_save_checkout_fields')
-    ) {
+        wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['storelinkformc_checkout_fields_nonce'])), 'storelinkformc_save_checkout_fields') &&
+        current_user_can('manage_options')
+    )
+
+    {
         $fields = isset($_POST['checkout_fields']) ? array_map('sanitize_text_field', (array) wp_unslash($_POST['checkout_fields'])) : [];
         update_option('storelinkformc_checkout_fields', $fields);
         echo '<div class="updated"><p>Settings saved successfully.</p></div>';
@@ -104,4 +107,17 @@ add_action('woocommerce_admin_order_data_after_billing_address', function ($orde
     if ($player) {
         echo '<p><strong>' . esc_html__('Minecraft Username:', 'storelinkformc') . '</strong> ' . esc_html($player) . '</p>';
     }
+});
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ($hook !== 'storelinkformc_page_storelinkformc_checkout_fields') return;
+
+    wp_register_script(
+        'storelinkformc-checkout',
+        plugins_url('../assets/js/checkout-fields.js', __FILE__),
+        [],
+        '1.0.0',
+        true
+    );
+    wp_enqueue_script('storelinkformc-checkout');
 });
