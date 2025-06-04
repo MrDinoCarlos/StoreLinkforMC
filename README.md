@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.20
+Stable tag: 1.0.21
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,18 +63,13 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.20 =
+= Version 1.0.21 =
 
-+ Replaced inline <script> tags with wp_enqueue_script and wp_add_inline_script for proper JS inclusion.
-+ Added admin_enqueue_scripts hook to load inline JavaScript only on the correct settings page.
-+ Escaped all dynamic data in echo statements using esc_html(), esc_attr(), and esc_url() where appropriate.
-+ Added current_user_can() permission checks to admin actions in deliveries management.
-+ Improved nonce validation by applying sanitize_text_field and wp_unslash before calling wp_verify_nonce().
-+ Validated and sanitized all $_POST inputs using WordPress security best practices.
-+ Ensured all sensitive POST actions in admin pages are properly protected from unauthorized access.
-+ Verified REST API endpoints already include secure permission_callback logic and token checks.
-+ Confirmed that all executable PHP files start with ABSPATH protection against direct access.
-
++ Reverted nonce validation for external REST API endpoints (/pending and /mark-delivered) since nonces are not applicable to headless clients (e.g. Minecraft plugins); retained secure token validation.
++ Ensured that any future CSS usage will follow WordPress.org guidelines by using wp_register_style() and wp_enqueue_style().
++ Confirmed that admin notices using <div class="updated">...</div> are safe if the content is static or properly escaped.
++ Verified all JavaScript files are correctly loaded via wp_register_script() and wp_enqueue_script(), using proper admin_enqueue_scripts hooks with correct $hook comparisons to limit scope.
++ Cleaned up and organized JS inclusion per file: `admin.js`, `checkout-fields.js`, `deliveries.js`, `products.js`, and `sync-roles.js` are now scoped to load only on their relevant admin pages.
 
 == License ==
 

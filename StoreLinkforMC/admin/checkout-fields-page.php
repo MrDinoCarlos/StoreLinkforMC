@@ -116,7 +116,7 @@ add_action('admin_enqueue_scripts', function ($hook) {
         'storelinkformc-checkout',
         plugins_url('../assets/js/checkout-fields.js', __FILE__),
         [],
-        '1.0.0',
+        filemtime(plugin_dir_path(__FILE__) . '../assets/js/checkout-fields.js'),
         true
     );
     wp_enqueue_script('storelinkformc-checkout');

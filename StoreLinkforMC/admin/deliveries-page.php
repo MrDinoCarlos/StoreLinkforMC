@@ -20,13 +20,18 @@ function storelinkformc_render_deliveries_page() {
     $editing_id = isset($_POST['edit_delivery']) ? intval($_POST['edit_delivery']) : 0;
 
     // 💣 RESET TOTAL DE BASE DE DATOS
-    if (isset($_POST['reset_database']) && isset($_POST['confirm_reset']) && $_POST['confirm_reset'] === 'yes') {
+    if (
+        isset($_POST['reset_database']) &&
+        isset($_POST['confirm_reset']) &&
+        $_POST['confirm_reset'] === 'yes' &&
+        current_user_can('manage_woocommerce')
+    ) {
         $wpdb->query("TRUNCATE TABLE $table");
         echo '<div class="updated"><p>💣 Database reset completed. All deliveries deleted.</p></div>';
     }
 
     // 🔄 Limpieza de duplicados
-    if (isset($_POST['cleanup_duplicates'])) {
+    if (isset($_POST['cleanup_duplicates']) && current_user_can('manage_woocommerce')) {
         $duplicates = $wpdb->get_results("SELECT player, item, order_id, COUNT(*) as total FROM $table GROUP BY player, item, order_id HAVING total > 1");
         $total_removed = 0;
 
@@ -43,7 +48,7 @@ function storelinkformc_render_deliveries_page() {
     }
 
     // 🧹 Borrar todas las entregas pendientes
-    if (isset($_POST['clear_all_deliveries'])) {
+    if (isset($_POST['clear_all_deliveries']) && current_user_can('manage_woocommerce')) {
         $wpdb->query("DELETE FROM $table WHERE delivered = 0");
         echo '<div class="updated"><p>All pending deliveries deleted.</p></div>';
     }

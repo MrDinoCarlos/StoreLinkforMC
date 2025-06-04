@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.21
+Stable tag: 1.0.22
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,13 +63,23 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.21 =
+= Version 1.0.22 =
 
-+ Reverted nonce validation for external REST API endpoints (/pending and /mark-delivered) since nonces are not applicable to headless clients (e.g. Minecraft plugins); retained secure token validation.
-+ Ensured that any future CSS usage will follow WordPress.org guidelines by using wp_register_style() and wp_enqueue_style().
-+ Confirmed that admin notices using <div class="updated">...</div> are safe if the content is static or properly escaped.
-+ Verified all JavaScript files are correctly loaded via wp_register_script() and wp_enqueue_script(), using proper admin_enqueue_scripts hooks with correct $hook comparisons to limit scope.
-+ Cleaned up and organized JS inclusion per file: `admin.js`, `checkout-fields.js`, `deliveries.js`, `products.js`, and `sync-roles.js` are now scoped to load only on their relevant admin pages.
+- Removed inline `<script>` from `storelinkformc_render_account_sync_page()` to comply with WordPress.org guidelines.
++ Added `filemtime()` as version argument in all `wp_enqueue_script()` calls to improve cache-busting during development.
++ Added user confirmation dialogs to `deliveries.js` for all destructive actions: deleting, resetting, and bulk clearing.
++ Created `assets/js/unlink-account.js` to manage Minecraft account unlinking from the frontend.
++ Created base admin JS scripts (`admin.js`, `products.js`, `checkout-fields.js`, `sync-roles.js`) with DOM readiness checks and console logs for debugging.
++ Implemented proper JavaScript loading using `wp_enqueue_script()` and `wp_localize_script()` only on pages with `[storelinkformc_account_sync]`.
++ Secured AJAX unlink requests with `wp_ajax_storelinkformc_unlink_account` and nonce verification.
++ Prevented unnecessary script loading for non-logged-in users and pages without the shortcode.
++ Fixed fatal syntax error due to missing bracket in `storelinkformc_enqueue_scripts()`.
++ Standardized enqueueing for all admin pages: settings, products, deliveries, checkout fields, and role sync — now each uses a versioned external JS file.
++ Ensured all JavaScript files are wrapped in `DOMContentLoaded` and scoped defensively to avoid errors on unrelated admin pages.
++ Verified correct WooCommerce dependency checks on settings and product pages.
++ Improved feedback and error handling in the unlink workflow: success, failure, and network error messages.
+
+
 
 == License ==
 

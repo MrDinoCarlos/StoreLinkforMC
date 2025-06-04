@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.21
+Version: 1.0.22
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
@@ -123,6 +123,7 @@ function storelinkformc_render_account_sync_page() {
     $player = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
 
     ob_start(); ?>
+
     <div class="storelinkformc-sync-wrapper">
         <h2>Minecraft Account Link</h2>
 
@@ -132,29 +133,48 @@ function storelinkformc_render_account_sync_page() {
         <?php else: ?>
             <p>⛔ You don’t have a Minecraft account linked. Go to the server and type /wsl wp-link (email) and verify with /wsl wp-verify (code)</p>
         <?php endif; ?>
-
-       <script>
-       document.addEventListener("DOMContentLoaded", () => {
-           const button = document.getElementById("storelinkformc-unlink-button");
-           if (button) {
-               button.addEventListener("click", () => {
-                   if (!confirm("Are you sure you want to unlink your Minecraft account?")) return;
-
-                   fetch("<?php echo esc_url(admin_url('admin-ajax.php')); ?>", {
-                       method: "POST",
-                       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                       body: "action=storelinkformc_unlink_account&security=<?php echo esc_attr(wp_create_nonce('storelinkformc_unlink_action')); ?>"
-                   }).then(res => res.json())
-                     .then(data => {
-                         alert(data.success ? "✅ Unlinked successfully!" : "❌ Failed to unlink.");
-                         location.reload();
-                     });
-               });
-           }
-       });
-       </script>
-
     </div>
+
     <?php
     return ob_get_clean();
+}
+
+function storelinkformc_enqueue_scripts() {
+    if (!is_user_logged_in()) return;
+
+    // Solo cargar si el shortcode está presente en la página
+    if (is_singular()) {
+        global $post;
+        if (has_shortcode($post->post_content, 'storelinkformc_account_sync')) {
+        wp_enqueue_script(
+            'storelinkformc-unlink-js',
+            plugin_dir_url(__FILE__) . 'assets/js/unlink-account.js',
+            array(),
+            filemtime(plugin_dir_path(__FILE__) . 'assets/js/unlink-account.js'),
+            true
+        );
+
+        wp_localize_script('storelinkformc-unlink-js', 'storelinkformc_vars', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('storelinkformc_unlink_action'),
+        ));
+    }
+}
+}
+
+add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_scripts');
+
+
+add_action('wp_ajax_storelinkformc_unlink_account', 'storelinkformc_handle_unlink');
+
+function storelinkformc_handle_unlink() {
+    check_ajax_referer('storelinkformc_unlink_action', 'security');
+
+    $user_id = get_current_user_id();
+    if (!$user_id) {
+        wp_send_json_error('User not logged in');
+    }
+
+    delete_user_meta($user_id, 'minecraft_player');
+    wp_send_json_success('Minecraft account unlinked');
 }
