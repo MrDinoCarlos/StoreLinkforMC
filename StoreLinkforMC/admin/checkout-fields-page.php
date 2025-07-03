@@ -26,6 +26,7 @@ function storelinkformc_checkout_fields_page() {
 
     $selected_fields = get_option('storelinkformc_checkout_fields', []);
     $all_fields = [
+        'minecraft_username' => 'Minecraft Username',
         'billing_first_name' => 'First Name',
         'billing_last_name'  => 'Last Name',
         'billing_email'      => 'Email',

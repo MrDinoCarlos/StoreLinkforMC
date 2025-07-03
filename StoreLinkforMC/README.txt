@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.22
+Stable tag: 1.0.23
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,21 +63,14 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.22 =
+= Version 1.0.23 =
 
-- Removed inline `<script>` from `storelinkformc_render_account_sync_page()` to comply with WordPress.org guidelines.
-+ Added `filemtime()` as version argument in all `wp_enqueue_script()` calls to improve cache-busting during development.
-+ Added user confirmation dialogs to `deliveries.js` for all destructive actions: deleting, resetting, and bulk clearing.
-+ Created `assets/js/unlink-account.js` to manage Minecraft account unlinking from the frontend.
-+ Created base admin JS scripts (`admin.js`, `products.js`, `checkout-fields.js`, `sync-roles.js`) with DOM readiness checks and console logs for debugging.
-+ Implemented proper JavaScript loading using `wp_enqueue_script()` and `wp_localize_script()` only on pages with `[storelinkformc_account_sync]`.
-+ Secured AJAX unlink requests with `wp_ajax_storelinkformc_unlink_account` and nonce verification.
-+ Prevented unnecessary script loading for non-logged-in users and pages without the shortcode.
-+ Fixed fatal syntax error due to missing bracket in `storelinkformc_enqueue_scripts()`.
-+ Standardized enqueueing for all admin pages: settings, products, deliveries, checkout fields, and role sync — now each uses a versioned external JS file.
-+ Ensured all JavaScript files are wrapped in `DOMContentLoaded` and scoped defensively to avoid errors on unrelated admin pages.
-+ Verified correct WooCommerce dependency checks on settings and product pages.
-+ Improved feedback and error handling in the unlink workflow: success, failure, and network error messages.
+- Added `minecraft_username` custom field to WooCommerce checkout with priority support and read-only autofill from linked account.
+- Ensured `minecraft_username` field is always included in the list of selected checkout fields by default on initial plugin setup.
+- Displayed the Minecraft username in WooCommerce admin order details under the billing address section.
+- Persisted the `minecraft_username` in order meta using `woocommerce_checkout_update_order_meta` hook.
+- Improved `woocommerce_checkout_fields` filter by merging allowed field logic and custom field injection.
+- Updated checkout field settings admin page to include `minecraft_username` as a selectable option with label `Minecraft Username`.
 
 
 
