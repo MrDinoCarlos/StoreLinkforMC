@@ -67,6 +67,23 @@ function storelinkformc_render_deliveries_page() {
             if (isset($_POST['mark_delivered'])) {
                 $wpdb->update($table, ['delivered' => 1], ['id' => $id]);
                 echo '<div class="updated"><p>Marked as delivered.</p></div>';
+
+                // ✅ Revisar si todas las entregas del pedido están entregadas y marcar pedido como completado
+                $order_id = $wpdb->get_var($wpdb->prepare("SELECT order_id FROM $table WHERE id = %d", $id));
+
+                $undelivered = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0",
+                    $order_id
+                ));
+
+                if ($undelivered == 0 && $order_id) {
+                    $order = wc_get_order($order_id);
+
+                    if ($order && in_array($order->get_status(), ['processing', 'on-hold', 'pending'])) {
+                        $order->update_status('completed', '✅ Pedido marcado como completado automáticamente después de la entrega.');
+                    }
+                }
+
             } elseif (isset($_POST['mark_undelivered'])) {
                 $wpdb->update($table, ['delivered' => 0], ['id' => $id]);
                 echo '<div class="updated"><p>Marked as undelivered.</p></div>';
@@ -110,12 +127,33 @@ function storelinkformc_render_deliveries_page() {
 	}
 
 	$where_sql = implode(' AND ', $where_clauses);
-	$rows = $wpdb->get_results(
-    	$wpdb->prepare(
-        	"SELECT * FROM $table WHERE $where_sql ORDER BY timestamp DESC",
-        	...$params
-    	)
-	);
+
+	    // 🚀 Verifica automáticamente pedidos entregados y actualiza su estado si es necesario
+        $order_ids = $wpdb->get_col("SELECT DISTINCT order_id FROM $table");
+
+        foreach ($order_ids as $order_id) {
+            $undelivered = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0",
+                $order_id
+            ));
+
+            if ($undelivered == 0 && $order_id) {
+                $order = wc_get_order($order_id);
+
+                if ($order && in_array($order->get_status(), ['processing', 'on-hold', 'pending'])) {
+                    $order->update_status('completed', '✅ Pedido marcado como completado automáticamente: todas las entregas realizadas.');
+                }
+            }
+        }
+
+        // 👇 AHORA sí va la consulta
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table WHERE $where_sql ORDER BY timestamp DESC",
+                ...$params
+            )
+        );
+
 
     echo '<div class="wrap"><h1>Pending Deliveries</h1>';
 

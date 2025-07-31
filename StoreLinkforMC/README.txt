@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.23
+Stable tag: 1.0.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,14 +63,19 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.23 =
+= Version 1.0.26 =
 
-- Added `minecraft_username` custom field to WooCommerce checkout with priority support and read-only autofill from linked account.
-- Ensured `minecraft_username` field is always included in the list of selected checkout fields by default on initial plugin setup.
-- Displayed the Minecraft username in WooCommerce admin order details under the billing address section.
-- Persisted the `minecraft_username` in order meta using `woocommerce_checkout_update_order_meta` hook.
-- Improved `woocommerce_checkout_fields` filter by merging allowed field logic and custom field injection.
-- Updated checkout field settings admin page to include `minecraft_username` as a selectable option with label `Minecraft Username`.
+- Added support for manual entry of `minecraft_username` at checkout, allowing purchases without linked accounts.
+- Introduced a new `minecraft_gift` checkbox field in checkout to send purchases as gifts to other Minecraft players.
+- Adjusted delivery logic to prioritize gifted usernames when the gift option is selected.
+- Ensured pending delivery creation works whether the Minecraft account is linked or entered manually.
+- Removed deprecated "Save Settings" button from admin settings page to prevent accidental token resets.
+- Improved checkout field behavior by allowing editing of the `minecraft_username` field at all times.
+- Secured all admin form submissions with appropriate nonce checks and capability restrictions.
+- Fixed WooCommerce admin order view to correctly reflect gifted usernames and manual entries.
+- Cleaned up enqueued script logic and ensured compatibility with latest WordPress/WooCommerce versions.
+- Orders are now automatically marked as completed in WooCommerce after delivery.
+- Added admin notice for WooCommerce block-based checkout warning and instructed users to revert to the `[woocommerce_checkout]` shortcode for compatibility.
 
 
 

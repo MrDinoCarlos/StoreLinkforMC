@@ -118,16 +118,11 @@ function storelinkformc_options_page() {
     ?>
     <div class="wrap">
         <h1>storelinkformc Settings</h1>
-        <form action="options.php" method="post">
-            <?php
-            settings_fields('storelinkformc_settings');
-            do_settings_sections('storelinkformc_settings');
-            submit_button('Save Settings');
-            ?>
-        </form>
+        <?php do_settings_sections('storelinkformc_settings'); ?>
     </div>
     <?php
 }
+
 
 add_action('admin_enqueue_scripts', 'storelinkformc_enqueue_admin_scripts');
 function storelinkformc_enqueue_admin_scripts($hook) {

@@ -26,16 +26,25 @@ function storelinkformc_checkout_fields_page() {
 
     $selected_fields = get_option('storelinkformc_checkout_fields', []);
     $all_fields = [
-        'minecraft_username' => 'Minecraft Username',
-        'billing_first_name' => 'First Name',
-        'billing_last_name'  => 'Last Name',
-        'billing_email'      => 'Email',
-        'billing_address_1'  => 'Address Line 1',
-        'billing_city'       => 'City',
-        'billing_postcode'   => 'Postal Code',
-        'billing_country'    => 'Country',
-        'billing_state'      => 'State/Province',
+        'minecraft_username'   => 'Minecraft Username',
+        'minecraft_gift'       => 'Gift this to another player',
+        'billing_first_name'   => 'Billing First Name',
+        'billing_last_name'    => 'Billing Last Name',
+        'billing_email'        => 'Billing Email',
+        'billing_address_1'    => 'Billing Address Line 1',
+        'billing_city'         => 'Billing City',
+        'billing_postcode'     => 'Billing Postal Code',
+        'billing_country'      => 'Billing Country',
+        'billing_state'        => 'Billing State/Province',
+        'shipping_first_name'  => 'Shipping First Name',
+        'shipping_last_name'   => 'Shipping Last Name',
+        'shipping_address_1'   => 'Shipping Address Line 1',
+        'shipping_city'        => 'Shipping City',
+        'shipping_postcode'    => 'Shipping Postal Code',
+        'shipping_country'     => 'Shipping Country',
+        'shipping_state'       => 'Shipping State/Province',
     ];
+
     ?>
     <div class="wrap">
         <h1><?php esc_html_e('Checkout Field Settings', 'storelinkformc'); ?></h1>
@@ -65,40 +74,56 @@ function storelinkformc_checkout_fields_page() {
 // Filter WooCommerce fields dynamically
 add_filter('woocommerce_checkout_fields', function ($fields) {
     $allowed = get_option('storelinkformc_checkout_fields', []);
-    if (!empty($allowed) && isset($fields['billing'])) {
-        foreach ($fields['billing'] as $key => $value) {
-            if (strpos($key, 'billing_') === 0 && !in_array($key, $allowed, true)) {
-                unset($fields['billing'][$key]);
+
+    if (!empty($allowed)) {
+        foreach (['billing', 'shipping'] as $section) {
+            if (isset($fields[$section])) {
+                foreach ($fields[$section] as $key => $value) {
+                    if (!in_array($key, $allowed, true)) {
+                        unset($fields[$section][$key]);
+                    }
+                }
             }
         }
     }
-    return $fields;
-}, 10);
 
-// Auto-fill Minecraft username field in checkout (read-only custom field)
-add_filter('woocommerce_checkout_fields', function ($fields) {
+    // Añadir campos personalizados para StoreLink
     $user = wp_get_current_user();
     $mc_name = ($user && $user->ID) ? get_user_meta($user->ID, 'minecraft_player', true) : '';
 
+    // Campo: "¿Es un regalo?"
+    $fields['billing']['minecraft_gift'] = [
+        'type'     => 'checkbox',
+        'label'    => __('🎁 This is a gift for another player', 'storelinkformc'),
+        'required' => false,
+        'priority' => 9998,
+    ];
+
+    // Campo: Minecraft Username (editable siempre)
     $fields['billing']['minecraft_username'] = [
-        'label' => __('Minecraft Username', 'storelinkformc'),
-        'type' => 'text',
+        'label'    => __('Minecraft Username', 'storelinkformc'),
+        'type'     => 'text',
         'required' => true,
-        'default' => $mc_name,
-        'custom_attributes' => $mc_name ? ['readonly' => 'readonly'] : [],
+        'default'  => $mc_name,
         'description' => $mc_name
-            ? __('This field is auto-filled from your linked Minecraft account.', 'storelinkformc')
-            : __('Link your Minecraft account to auto-fill this.', 'storelinkformc'),
-        'priority' => 5,
+            ? __('Your linked Minecraft name (or enter another for gifting)', 'storelinkformc')
+            : __('Enter the Minecraft username to receive the item', 'storelinkformc'),
+        'priority' => 9999,
     ];
 
     return $fields;
-}, 15);
+}, 10);
+
 
 // Save the Minecraft username to the order meta
 add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
     if (isset($_POST['minecraft_username'])) {
         update_post_meta($order_id, '_minecraft_username', sanitize_text_field(wp_unslash($_POST['minecraft_username'])));
+    }
+    if (!empty($_POST['minecraft_gift'])) {
+        update_post_meta($order_id, '_minecraft_gift', 'yes');
+    } else {
+        update_post_meta($order_id, '_minecraft_gift', 'no');
     }
 });
 

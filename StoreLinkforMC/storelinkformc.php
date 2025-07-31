@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.23
+Version: 1.0.26
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
@@ -20,6 +20,16 @@ require_once plugin_dir_path(__FILE__) . 'admin/checkout-fields-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/sync-roles-page.php';
 require_once plugin_dir_path(__FILE__) . 'linking-api.php';
 
+// ⚠️ Aviso si el checkout usa bloques (no compatible)
+add_action('admin_notices', function () {
+    if (function_exists('wc_get_page_id') && has_blocks(get_post(wc_get_page_id('checkout')))) {
+        echo '<div class="notice notice-warning"><p>
+        ⚠️ <strong>StoreLink for MC:</strong> The new WooCommerce block-based checkout is not compatible with this plugin. Please edit the Checkout page and replace it with the <code>[woocommerce_checkout]</code> shortcode.
+        </p></div>';
+    }
+});
+
+
 // ⛏ Crear entrega pendiente cuando un pedido se procese o complete
 add_action('woocommerce_order_status_processing', 'storelinkformc_create_pending_delivery');
 add_action('woocommerce_order_status_completed', 'storelinkformc_create_pending_delivery');
@@ -30,7 +40,15 @@ function storelinkformc_create_pending_delivery($order_id) {
 
     global $wpdb;
     $user_id = $order->get_user_id();
-    $player_name = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+    $gift = get_post_meta($order_id, '_minecraft_gift', true);
+    $gift_to = get_post_meta($order_id, '_minecraft_username', true);
+
+    if ($gift === 'yes' && !empty($gift_to)) {
+        $player_name = sanitize_text_field($gift_to);
+    } else {
+        $player_name = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+    }
+
     if (empty($player_name) || !is_string($player_name)) return;
 
     $allowed_products = get_option('storelinkformc_sync_products', []);
@@ -163,6 +181,20 @@ function storelinkformc_enqueue_scripts() {
 }
 
 add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_scripts');
+
+add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_checkout_script');
+function storelinkformc_enqueue_checkout_script() {
+    $selected_fields = get_option('storelinkformc_checkout_fields', []);
+    wp_register_script(
+        'storelinkformc-checkout',
+        plugin_dir_url(__FILE__) . 'assets/js/checkout-fields.js',
+        [],
+        filemtime(plugin_dir_path(__FILE__) . 'assets/js/checkout-fields.js'),
+        true
+    );
+    wp_enqueue_script('storelinkformc-checkout');
+    wp_localize_script('storelinkformc-checkout', 'storelinkformc_allowed_fields', $selected_fields);
+}
 
 
 add_action('wp_ajax_storelinkformc_unlink_account', 'storelinkformc_handle_unlink');
