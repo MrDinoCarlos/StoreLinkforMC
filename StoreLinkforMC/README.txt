@@ -2,10 +2,10 @@
 Contributors: mrdinocarlos
 Donate link: https://buymeacoffee.com/mrdino
 Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
-Requires at least: 5.8
+Requires at least: 6.0
 Tested up to: 6.8
-Requires PHP: 7.4
-Stable tag: 1.0.26
+Requires PHP: 8.1
+Stable tag: 1.0.27
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,19 +63,25 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.26 =
+= Version 1.0.27 =
 
-- Added support for manual entry of `minecraft_username` at checkout, allowing purchases without linked accounts.
-- Introduced a new `minecraft_gift` checkbox field in checkout to send purchases as gifts to other Minecraft players.
-- Adjusted delivery logic to prioritize gifted usernames when the gift option is selected.
-- Ensured pending delivery creation works whether the Minecraft account is linked or entered manually.
-- Removed deprecated "Save Settings" button from admin settings page to prevent accidental token resets.
-- Improved checkout field behavior by allowing editing of the `minecraft_username` field at all times.
-- Secured all admin form submissions with appropriate nonce checks and capability restrictions.
-- Fixed WooCommerce admin order view to correctly reflect gifted usernames and manual entries.
-- Cleaned up enqueued script logic and ensured compatibility with latest WordPress/WooCommerce versions.
-- Orders are now automatically marked as completed in WooCommerce after delivery.
-- Added admin notice for WooCommerce block-based checkout warning and instructed users to revert to the `[woocommerce_checkout]` shortcode for compatibility.
+- Added automatic database table creation on plugin activation.
+- Added silent self-repair routine to recreate missing tables when detected.
+- Added automatic replacement of WooCommerce Checkout with the `[woocommerce_checkout]` shortcode on activation for full compatibility.
+- Added manual "Rebuild Tables" and "Force Classic Checkout" buttons in the plugin settings page.
+- Added localized greeting and delivery message on the order confirmation page, showing the player’s Minecraft username and delivery notice for synced or gifted items.
+- Improved Minecraft checkout field behavior:
+  - Field now becomes editable only when “🎁 This is a gift” is selected.
+  - Field automatically clears when gifting and shows proper placeholder.
+  - Dynamic label updates to reflect “required”, “auto-linked”, or “disabled” states.
+- Improved JavaScript logic to reapply checkout field state after WooCommerce AJAX refresh.
+- Improved English UI and help texts across admin pages and checkout labels for clarity.
+- Fixed optional/required inconsistencies in the Minecraft username field under different user states.
+- Fixed delivery confirmation text not showing the recipient name for gifted purchases.
+- Fixed minor layout inconsistencies in admin settings sections.
+- Changed internal script enqueue logic for better compatibility with recent WooCommerce versions.
+- Changed activation routine to automatically enforce classic checkout template when using block-based checkout.
+- Cleaned up code structure and minor performance optimizations.
 
 
 

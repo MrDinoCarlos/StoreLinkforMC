@@ -72,6 +72,7 @@ function storelinkformc_checkout_fields_page() {
 }
 
 // Filter WooCommerce fields dynamically
+// Filter WooCommerce fields dynamically
 add_filter('woocommerce_checkout_fields', function ($fields) {
     $allowed = get_option('storelinkformc_checkout_fields', []);
 
@@ -87,32 +88,50 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
         }
     }
 
-    // Añadir campos personalizados para StoreLink
-    $user = wp_get_current_user();
+    $user    = wp_get_current_user();
     $mc_name = ($user && $user->ID) ? get_user_meta($user->ID, 'minecraft_player', true) : '';
 
-    // Campo: "¿Es un regalo?"
-    $fields['billing']['minecraft_gift'] = [
-        'type'     => 'checkbox',
-        'label'    => __('🎁 This is a gift for another player', 'storelinkformc'),
-        'required' => false,
-        'priority' => 9998,
-    ];
+    // Add custom fields ONLY if enabled in settings
+    if (in_array('minecraft_gift', $allowed, true)) {
+        $fields['billing']['minecraft_gift'] = [
+            'type'     => 'checkbox',
+            'label'    => __('🎁 This is a gift', 'storelinkformc'),
+            'required' => false,
+            'priority' => 9998,
+            'class'    => ['form-row-wide'],
+        ];
+    }
 
-    // Campo: Minecraft Username (editable siempre)
-    $fields['billing']['minecraft_username'] = [
-        'label'    => __('Minecraft Username', 'storelinkformc'),
-        'type'     => 'text',
-        'required' => true,
-        'default'  => $mc_name,
-        'description' => $mc_name
-            ? __('Your linked Minecraft name (or enter another for gifting)', 'storelinkformc')
-            : __('Enter the Minecraft username to receive the item', 'storelinkformc'),
-        'priority' => 9999,
-    ];
+    if (in_array('minecraft_username', $allowed, true)) {
+
+        // Inicial: si está vinculado → readonly; si NO → disabled hasta que marquen gift
+        $custom_attributes = [];
+        if (!empty($mc_name)) {
+            $custom_attributes['readonly'] = 'readonly';
+        } else {
+            $custom_attributes['disabled'] = 'disabled';
+            $custom_attributes['readonly'] = 'readonly';
+        }
+
+        $fields['billing']['minecraft_username'] = [
+            'label'             => __('Minecraft Username', 'storelinkformc'),
+            'type'              => 'text',
+            'required'          => false, // JS + validación servidor lo hacen obligatorio solo si es gift
+            'default'           => $mc_name ?: '',
+            'description'       => !empty($mc_name)
+                ? __('Your linked Minecraft username will be used unless you mark this order as a gift.', 'storelinkformc')
+                : __('Enter the recipient’s Minecraft username when gifting.', 'storelinkformc'),
+            'placeholder'       => __('Recipient username (required for gifts)', 'storelinkformc'),
+            'priority'          => 9999,
+            'class'             => ['form-row-wide'],
+            'custom_attributes' => $custom_attributes,
+        ];
+    }
 
     return $fields;
 }, 10);
+
+
 
 
 // Save the Minecraft username to the order meta
@@ -147,3 +166,134 @@ add_action('admin_enqueue_scripts', function ($hook) {
     );
     wp_enqueue_script('storelinkformc-checkout');
 });
+
+// Enforce linking (self-purchase) vs gift + policy
+add_action('woocommerce_checkout_process', function () {
+    // If you disabled the custom fields in settings, skip
+    $allowed = get_option('storelinkformc_checkout_fields', []);
+    $has_username_field = in_array('minecraft_username', $allowed, true);
+    $has_gift_field     = in_array('minecraft_gift', $allowed, true);
+
+    // Read form
+    $gift = !empty($_POST['minecraft_gift']); // checkbox present only when checked
+    $nick = isset($_POST['minecraft_username']) ? sanitize_text_field($_POST['minecraft_username']) : '';
+
+    // CASE A) Not a gift => must be linked
+    if (!$gift) {
+        // Require login to self-purchase
+        if (!is_user_logged_in()) {
+            wc_add_notice(__('Please log in and link your Minecraft account to purchase for yourself. You can also tick "This is a gift" to buy for another player.', 'storelinkformc'), 'error');
+            return;
+        }
+
+        $user_id = get_current_user_id();
+        $linked  = get_user_meta($user_id, 'minecraft_player', true);
+
+        if (!$linked) {
+            wc_add_notice(__('This store requires you to link your Minecraft account before purchasing for yourself. Either link your account first or tick "This is a gift".', 'storelinkformc'), 'error');
+            return;
+        }
+
+        // If you prefer, you can ignore any typed username when not gifting.
+        // Do NOT Mojang-check here: self-purchase uses the linked account.
+        return;
+    }
+
+    // CASE B) Gift => validate the provided recipient username
+    // Make sure the username field is present when gifting
+    if ($has_username_field && empty($nick)) {
+        wc_add_notice(__('Please enter the recipient\'s Minecraft username.', 'storelinkformc'), 'error');
+        return;
+    }
+
+    // Policy check (only when premium mode)
+    $policy = get_option('storelinkformc_username_policy', 'premium');
+    if ($policy === 'premium') {
+        if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $nick)) {
+            wc_add_notice(__('Invalid Minecraft username format.', 'storelinkformc'), 'error');
+            return;
+        }
+
+        // Uses the helper from linking-api.php
+        if (!function_exists('storelinkformc_mojang_check_username')) {
+            wc_add_notice(__('Internal error: Mojang validator not found.', 'storelinkformc'), 'error');
+            return;
+        }
+
+        $check = storelinkformc_mojang_check_username($nick);
+        if (!$check['ok']) {
+            if ($check['reason'] === 'ERR') {
+                wc_add_notice(__('Mojang verification is temporarily unavailable. Please try again.', 'storelinkformc'), 'error');
+            } else {
+                wc_add_notice(__('❌ That Minecraft username does not exist on Mojang.', 'storelinkformc'), 'error');
+            }
+            return;
+        } else {
+            // Make the resolved UUID available to the save hook
+            $_POST['minecraft_uuid_resolved'] = $check['uuid'];
+        }
+    }
+});
+
+add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
+    if (!empty($_POST['minecraft_uuid_resolved'])) {
+        $raw = preg_replace('/[^a-f0-9]/i', '', $_POST['minecraft_uuid_resolved']);
+        $uuid = substr($raw,0,8).'-'.substr($raw,8,4).'-'.substr($raw,12,4).'-'.substr($raw,16,4).'-'.substr($raw,20);
+        update_post_meta($order_id, '_minecraft_uuid', $uuid);
+    }
+}, 20);
+
+// Show an info notice on checkout: link account if NOT gifting
+add_action('woocommerce_before_checkout_form', function () {
+    if ( ! function_exists('wc_print_notice') || ! is_checkout() ) return;
+
+    // Only show if your Minecraft fields are in use
+    $allowed = get_option('storelinkformc_checkout_fields', []);
+    if ( empty($allowed) || ! in_array('minecraft_username', $allowed, true) ) return;
+
+    // If gifting is disabled in settings, always require linking (so always show)
+    $has_gift_field = in_array('minecraft_gift', $allowed, true);
+
+    // Build the message depending on login/link status
+    if ( ! is_user_logged_in() ) {
+        $msg = '<div class="storelinkformc-linking-notice">To purchase for yourself, please <strong>log in and link your Minecraft account</strong>. '
+             . ( $has_gift_field ? 'Or tick <em>"This is a gift"</em> to buy for another player.' : '' )
+             . '</div>';
+        wc_print_notice($msg, 'notice');
+        return;
+    }
+
+    $linked = get_user_meta(get_current_user_id(), 'minecraft_player', true);
+    if ( ! $linked ) {
+        $msg = '<div class="storelinkformc-linking-notice">You are not linked. To purchase for yourself, please <strong>link your Minecraft account</strong>. '
+             . ( $has_gift_field ? 'Alternatively, tick <em>"This is a gift"</em> to buy for another player.' : '' )
+             . '</div>';
+        wc_print_notice($msg, 'notice');
+    }
+});
+
+// Hide the notice automatically when "gift" is checked (and show it back if unchecked)
+add_action('wp_enqueue_scripts', function () {
+    if ( ! is_checkout() ) return;
+
+    // Make sure jQuery is available
+    wp_enqueue_script('jquery');
+
+    $js = <<<JS
+jQuery(function($){
+  function toggleLinkingNotice(){
+    var \$gift = $('#minecraft_gift, #billing_minecraft_gift');
+    var giftChecked = \$gift.length && \$gift.is(':checked');
+    var \$notice = $('.storelinkformc-linking-notice').closest('.woocommerce-info, .woocommerce-message, .woocommerce-error');
+    if (!\$notice.length) return;
+
+    if (giftChecked) { \$notice.hide(); }
+    else { \$notice.show(); }
+  }
+  toggleLinkingNotice();
+  $(document).on('change', '#minecraft_gift, #billing_minecraft_gift', toggleLinkingNotice);
+});
+JS;
+    wp_add_inline_script('jquery', $js);
+});
+

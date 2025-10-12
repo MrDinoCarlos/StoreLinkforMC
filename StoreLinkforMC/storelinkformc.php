@@ -3,7 +3,9 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.26
+Version: 1.0.27
+Requires PHP: 8.1
+Requires at least: 6.0
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
@@ -19,16 +21,153 @@ require_once plugin_dir_path(__FILE__) . 'admin/deliveries-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/checkout-fields-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/sync-roles-page.php';
 require_once plugin_dir_path(__FILE__) . 'linking-api.php';
+require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-order-fields.php';
 
-// ⚠️ Aviso si el checkout usa bloques (no compatible)
-add_action('admin_notices', function () {
-    if (function_exists('wc_get_page_id') && has_blocks(get_post(wc_get_page_id('checkout')))) {
-        echo '<div class="notice notice-warning"><p>
-        ⚠️ <strong>StoreLink for MC:</strong> The new WooCommerce block-based checkout is not compatible with this plugin. Please edit the Checkout page and replace it with the <code>[woocommerce_checkout]</code> shortcode.
-        </p></div>';
+// === INSTALL / SELF-HEAL =====================================================
+register_activation_hook(__FILE__, 'storelinkformc_install');
+
+function storelinkformc_install() {
+    storelinkformc_create_or_update_tables();
+    storelinkformc_force_classic_checkout(true); // true = forzar en activación
+}
+
+add_action('admin_init', function () {
+    // Autocuración silenciosa si alguien migró sin activar correctamente
+    global $wpdb;
+    $table = $wpdb->prefix . 'pending_deliveries';
+    $exists = $wpdb->get_var( $wpdb->prepare("SHOW TABLES LIKE %s", $table) );
+    if ($exists !== $table) {
+        storelinkformc_create_or_update_tables();
     }
 });
 
+/**
+ * Crea/actualiza tablas necesarias del plugin.
+ */
+function storelinkformc_create_or_update_tables() {
+    global $wpdb;
+    $table   = $wpdb->prefix . 'pending_deliveries';
+    $charset = $wpdb->get_charset_collate();
+
+    // Mantén este esquema en línea con lo que usa el plugin
+    $sql = "
+        CREATE TABLE $table (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            order_id BIGINT UNSIGNED,
+            player VARCHAR(255),
+            item VARCHAR(255),
+            amount INT DEFAULT 1,
+            delivered TINYINT(1) DEFAULT 0,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY order_id (order_id),
+            KEY player (player),
+            KEY delivered (delivered)
+        ) $charset;
+    ";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+}
+
+/**
+ * Reemplaza el Checkout de WooCommerce por el shortcode clásico.
+ * @param bool $force Si true, reemplaza siempre aunque tenga contenido.
+ */
+function storelinkformc_force_classic_checkout($force = false) {
+    if ( ! function_exists('wc_get_page_id') ) return;
+
+    $checkout_id = wc_get_page_id('checkout');
+    if ( ! $checkout_id || $checkout_id <= 0 ) return;
+
+    $post = get_post($checkout_id);
+    if ( ! $post || 'trash' === $post->post_status ) return;
+
+    $shortcode = '[woocommerce_checkout]';
+
+    // ¿Ya está correcto?
+    $has_shortcode = (false !== strpos($post->post_content, $shortcode));
+    $has_block     = (function_exists('has_blocks') && has_blocks($post));
+
+    if ($force || $has_block || ! $has_shortcode) {
+        // Reemplaza todo el contenido por el shortcode clásico
+        $update = [
+            'ID'           => $checkout_id,
+            'post_content' => $shortcode,
+            'post_status'  => 'publish',
+        ];
+
+        wp_update_post($update);
+        // Limpia caché por si hay plugins de cache
+        clean_post_cache($checkout_id);
+    }
+}
+
+
+// ⚠️ Aviso si el checkout usa bloques (no compatible) — oculto si ya hay shortcode
+add_action('admin_notices', 'storelinkformc_checkout_blocks_notice');
+function storelinkformc_checkout_blocks_notice() {
+    if ( ! current_user_can('manage_options') ) return;
+
+    // ¿ya lo cerró este usuario?
+    if ( get_user_meta(get_current_user_id(), 'storelinkformc_dismiss_checkout_blocks_notice', true) ) return;
+
+    if ( ! function_exists('wc_get_page_id') ) return;
+
+    $checkout_id = wc_get_page_id('checkout');
+    if ( ! $checkout_id || $checkout_id <= 0 ) return;
+
+    $post = get_post($checkout_id);
+    if ( ! $post || 'trash' === $post->post_status ) return;
+
+    $shortcode = '[woocommerce_checkout]';
+
+    // Detecta correctamente shortcode y bloques
+    $has_shortcode = (false !== strpos($post->post_content, $shortcode))
+                     || (function_exists('has_shortcode') && has_shortcode($post->post_content, 'woocommerce_checkout'));
+    $has_block = function_exists('has_blocks') && has_blocks($post);
+
+    // Si ya está el shortcode y NO hay bloques, todo OK => no mostrar aviso
+    if ( $has_shortcode && ! $has_block ) return;
+
+    // Si hay bloques o falta el shortcode, mostrar aviso
+    $nonce = wp_create_nonce('storelinkformc_dismiss_notice');
+    $url_force = wp_nonce_url(
+        admin_url('admin-post.php?action=storelinkformc_force_checkout_shortcode'),
+        'storelinkformc_force_checkout_action',
+        'storelinkformc_force_checkout_nonce'
+    );
+
+    echo '<div class="notice notice-warning is-dismissible storelinkformc-dismissable" data-nonce="' . esc_attr($nonce) . '">
+        <p>⚠️ <strong>StoreLink for MC:</strong> The new WooCommerce block-based checkout is not compatible with this plugin.
+        Please edit the Checkout page and replace it with the <code>[woocommerce_checkout]</code> shortcode.
+        <a href="' . esc_url($url_force) . '" class="button button-secondary" style="margin-left:8px;">Forzar ahora</a></p>
+    </div>';
+}
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    // Cargar solo en admin (es liviano y se ata a jQuery de WP)
+    wp_enqueue_script('jquery');
+    $js = <<<JS
+jQuery(document).on('click', '.storelinkformc-dismissable .notice-dismiss', function() {
+  var \$n = jQuery(this).closest('.storelinkformc-dismissable');
+  jQuery.post(ajaxurl, {
+    action: 'storelinkformc_dismiss_checkout_notice',
+    _ajax_nonce: \$n.data('nonce')
+  });
+});
+JS;
+    wp_add_inline_script('jquery', $js);
+});
+
+add_action('wp_ajax_storelinkformc_dismiss_checkout_notice', function () {
+    check_ajax_referer('storelinkformc_dismiss_notice');
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error('forbidden', 403);
+    }
+    update_user_meta(get_current_user_id(), 'storelinkformc_dismiss_checkout_blocks_notice', 1);
+    wp_send_json_success();
+});
 
 // ⛏ Crear entrega pendiente cuando un pedido se procese o complete
 add_action('woocommerce_order_status_processing', 'storelinkformc_create_pending_delivery');
@@ -184,7 +323,8 @@ add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_scripts');
 
 add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_checkout_script');
 function storelinkformc_enqueue_checkout_script() {
-    $selected_fields = get_option('storelinkformc_checkout_fields', []);
+    if (!function_exists('is_checkout') || !is_checkout()) return;
+
     wp_register_script(
         'storelinkformc-checkout',
         plugin_dir_url(__FILE__) . 'assets/js/checkout-fields.js',
@@ -193,7 +333,15 @@ function storelinkformc_enqueue_checkout_script() {
         true
     );
     wp_enqueue_script('storelinkformc-checkout');
-    wp_localize_script('storelinkformc-checkout', 'storelinkformc_allowed_fields', $selected_fields);
+
+    $linked_player = '';
+    if (is_user_logged_in()) {
+        $linked_player = sanitize_text_field(get_user_meta(get_current_user_id(), 'minecraft_player', true));
+    }
+
+    wp_localize_script('storelinkformc-checkout', 'storelinkformc_checkout_vars', [
+        'linked_player' => $linked_player,
+    ]);
 }
 
 
@@ -209,4 +357,61 @@ function storelinkformc_handle_unlink() {
 
     delete_user_meta($user_id, 'minecraft_player');
     wp_send_json_success('Minecraft account unlinked');
+}
+
+// Personalize the "order received" message on the thank you page
+add_filter('woocommerce_thankyou_order_received_text', 'storelinkformc_thankyou_text', 10, 2);
+function storelinkformc_thankyou_text($text, $order) {
+    if (!$order instanceof WC_Order) {
+        return $text;
+    }
+
+    $order_id   = $order->get_id();
+    $user_id    = $order->get_user_id();
+
+    $gift       = get_post_meta($order_id, '_minecraft_gift', true) === 'yes';
+    $recipient  = sanitize_text_field(get_post_meta($order_id, '_minecraft_username', true));
+    $linked     = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
+
+    // 1) Insert Minecraft username right after "Gracias"/"Thank you" when available (non-gift)
+    $player_to_show = $linked ? $linked : '';
+    if ($player_to_show) {
+        // Try to inject after "Gracias." or "Thank you."
+        $pattern = '/^(Gracias|Thank you)\./i';
+        if (preg_match($pattern, $text)) {
+            $replacement = '$1, ' . esc_html($player_to_show) . '.';
+            $text = preg_replace($pattern, $replacement, $text, 1);
+        } else {
+            // Fallback: prepend politely if theme string is different
+            $prefix = sprintf(__('Thank you, %s.', 'storelinkformc'), esc_html($player_to_show));
+            $text = $prefix . ' ' . $text;
+        }
+    }
+
+    // 2) If order includes synced products, add delivery hint
+    $allowed_products = get_option('storelinkformc_sync_products', []);
+    $has_synced = false;
+    if (is_array($allowed_products) && !empty($allowed_products)) {
+        foreach ($order->get_items() as $item) {
+            $pid = $item->get_product_id();
+            if (in_array($pid, $allowed_products, true)) {
+                $has_synced = true;
+                break;
+            }
+        }
+    }
+
+    if ($has_synced) {
+        if ($gift && !empty($recipient)) {
+            $extra = sprintf(
+                __(' Your item(s) will be delivered on the server to %s as soon as possible.', 'storelinkformc'),
+                esc_html($recipient)
+            );
+        } else {
+            $extra = __(' Your item(s) will be delivered on the server as soon as possible.', 'storelinkformc');
+        }
+        $text .= $extra;
+    }
+
+    return $text;
 }

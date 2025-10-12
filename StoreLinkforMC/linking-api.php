@@ -48,6 +48,18 @@ function storelinkformc_request_link($request) {
     $email  = sanitize_email($request->get_param('email'));
     $player = sanitize_user($request->get_param('player'));
 
+    // Enforce policy (optional here – pre-check before emailing)
+    $policy = get_option('storelinkformc_username_policy', 'premium');
+    if ($policy === 'premium') {
+        $check = storelinkformc_mojang_check_username($player);
+        if (!$check['ok']) {
+            $msg = ($check['reason'] === 'ERR')
+                ? 'Mojang verification is temporarily unavailable. Please try again.'
+                : 'This site only accepts Mojang (premium) usernames.';
+            return new WP_REST_Response(['error' => $msg], 400);
+        }
+    }
+
     if (!is_email($email) || empty($player)) {
         return new WP_REST_Response(['error' => 'Invalid email or player'], 400);
     }
@@ -89,15 +101,26 @@ function storelinkformc_verify_link($request) {
     $key   = 'storelinkformc_verify_code_' . md5($email);
 
     $data = get_transient($key);
-
     if (!$data || empty($data['code']) || (string)$data['code'] !== $code) {
         return new WP_REST_Response(['error' => 'Invalid or expired code.'], 400);
     }
 
+    // Enforce policy (authoritative)
+    $policy = get_option('storelinkformc_username_policy', 'premium');
+    if ($policy === 'premium') {
+        $check = storelinkformc_mojang_check_username($data['player']);
+        if (!$check['ok']) {
+            $msg = ($check['reason'] === 'ERR')
+                ? 'Mojang verification is temporarily unavailable. Please try again.'
+                : 'This site only accepts Mojang (premium) usernames.';
+            return new WP_REST_Response(['error' => $msg], 400);
+        }
+    }
+
+    // Now it’s safe to write
     update_user_meta($data['user_id'], 'minecraft_player', $data['player']);
     delete_transient($key);
 
-    // Asignar rol automáticamente
     $role = get_option('storelinkformc_default_linked_role');
     if ($role && !user_can($data['user_id'], $role)) {
         $user = new WP_User($data['user_id']);
@@ -106,6 +129,7 @@ function storelinkformc_verify_link($request) {
 
     return new WP_REST_Response(['success' => true, 'message' => 'Your account has been linked and role assigned!'], 200);
 }
+
 
 // 🔓 AJAX: Desvincular cuenta desde frontend
 add_action('wp_ajax_storelinkformc_unlink_account', 'storelinkformc_handle_unlink_ajax');
@@ -215,4 +239,43 @@ function storelinkformc_api_mark_delivered($request) {
     }
 
     return new WP_REST_Response(['success' => true, 'message' => 'Marked as delivered'], 200);
+}
+
+/**
+ * Check if a Minecraft username exists on Mojang (premium).
+ * Returns ['ok'=>true,'uuid'=>string] or ['ok'=>false,'reason'=>'NF|ERR'].
+ */
+function storelinkformc_mojang_check_username($nick) {
+    $nick = trim($nick);
+    if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $nick)) {
+        return ['ok' => false, 'reason' => 'NF']; // invalid format → treat as not found
+    }
+
+    $cache_key = 'mojang_profile_' . strtolower($nick);
+    $cached = get_transient($cache_key);
+    if ($cached !== false) {
+        if ($cached === 'NF') return ['ok'=>false,'reason'=>'NF'];
+        if (is_array($cached) && !empty($cached['uuid'])) return ['ok'=>true,'uuid'=>$cached['uuid']];
+    }
+
+    $resp = wp_remote_get('https://api.mojang.com/users/profiles/minecraft/' . rawurlencode($nick), [
+        'timeout' => 8,
+        'headers' => ['Accept' => 'application/json'],
+    ]);
+    $code = wp_remote_retrieve_response_code($resp);
+
+    if ($code === 200) {
+        $body = json_decode(wp_remote_retrieve_body($resp), true);
+        $uuid = isset($body['id']) ? preg_replace('/[^a-f0-9]/i', '', $body['id']) : '';
+        if ($uuid) {
+            set_transient($cache_key, ['uuid'=>$uuid], DAY_IN_SECONDS);
+            return ['ok'=>true,'uuid'=>$uuid];
+        }
+        return ['ok'=>false,'reason'=>'NF'];
+    } elseif ($code === 204 || $code === 404) {
+        set_transient($cache_key, 'NF', HOUR_IN_SECONDS);
+        return ['ok'=>false,'reason'=>'NF'];
+    }
+
+    return ['ok'=>false,'reason'=>'ERR']; // network / rate-limit / service down
 }
