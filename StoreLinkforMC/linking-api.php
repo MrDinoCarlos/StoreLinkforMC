@@ -10,7 +10,8 @@ add_action('rest_api_init', function () {
             $player = sanitize_user($request->get_param('player'));
 
             // Rate limiting per IP
-            $ip_key = 'storelinkformc_rate_' . md5($_SERVER['REMOTE_ADDR']);
+            $real_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $ip_key  = 'storelinkformc_rate_' . md5($real_ip);
             if (get_transient($ip_key)) {
                 return new WP_REST_Response(['error' => 'Please wait before requesting another code.'], 429);
             }
@@ -64,9 +65,11 @@ function storelinkformc_request_link($request) {
         return new WP_REST_Response(['error' => 'Invalid email or player'], 400);
     }
 
+    // === Require that the email belongs to an existing WP user ===
     $user = get_user_by('email', $email);
     if (!$user) {
-        return new WP_REST_Response(['error' => 'User not found'], 404);
+        error_log('[SLMC] request-link: user not found for email='.$email.' player='.$player.' ip='.$_SERVER['REMOTE_ADDR']);
+        return new WP_REST_Response(['error' => 'User not found. Please register on the site before linking.'], 404);
     }
 
     $existing = get_user_meta($user->ID, 'minecraft_player', true);
@@ -89,7 +92,8 @@ function storelinkformc_request_link($request) {
         'user_id' => $user->ID,
     ], HOUR_IN_SECONDS);
 
-    wp_mail($email, "Your Minecraft Link Code", "Use this code to link your Minecraft account: $code");
+    $link_url = slmc_build_link_url($email, (string)$code);
+    slmc_send_linking_email($email, (string)$code, $link_url, $player);
 
     return new WP_REST_Response(['success' => true, 'message' => 'Verification code sent.'], 200);
 }
@@ -278,4 +282,66 @@ function storelinkformc_mojang_check_username($nick) {
     }
 
     return ['ok'=>false,'reason'=>'ERR']; // network / rate-limit / service down
+}
+
+// ========================
+// Utilidades de email/URL
+// ========================
+if (!function_exists('slmc_build_link_url')) {
+    /**
+     * Construye URL opcional de verificación por clic:
+     * https://tusitio.com/?slmc-verify=CODE&slmc-email=EMAIL
+     */
+    function slmc_build_link_url(string $email, string $code): string {
+        return add_query_arg(
+            ['slmc-verify' => rawurlencode($code), 'slmc-email' => rawurlencode($email)],
+            home_url('/')
+        );
+    }
+}
+
+if (!function_exists('slmc_mail_content_type_html')) {
+    function slmc_mail_content_type_html(){ return 'text/html'; }
+}
+
+if (!function_exists('slmc_send_linking_email')) {
+    /**
+     * Envía el email usando wp_mail() (lo que tenga tu WP/hosting o plugin SMTP).
+     * Usa las plantillas guardadas en opciones.
+     */
+    function slmc_send_linking_email(string $user_email, string $verify_code, string $link_url, string $player = ''): bool {
+        $site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+        $domain    = parse_url(home_url(), PHP_URL_HOST);
+        if (!$domain) { $domain = $_SERVER['HTTP_HOST'] ?? 'localhost'; }
+
+        $subject_tpl = get_option('slmc_tpl_link_subject', 'Link your Minecraft account on {site_name}');
+        $body_tpl    = get_option('slmc_tpl_link_html',
+            '<p>Hello,</p>'.
+            '<p>Use this code: <strong>{verify_code}</strong> to link your account.</p>'.
+            '<p><a href="{link_url}">{link_url}</a></p>'.
+            '<p>— {site_name}</p>'
+        );
+
+        $repl = [
+            '{site_name}'   => $site_name,
+            '{user_email}'  => $user_email,
+            '{verify_code}' => $verify_code,
+            '{link_url}'    => $link_url,
+            '{player}'      => $player,           // <-- nuevo placeholder
+        ];
+
+        $subject = strtr($subject_tpl, $repl);
+        $body    = strtr($body_tpl, $repl);
+
+        $from_email = 'no-reply@' . $domain;
+        $headers   = [
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . $site_name . ' <' . $from_email . '>',
+        ];
+
+        $ok = wp_mail($user_email, $subject, $body, $headers);
+        error_log('[SLMC] wp_mail to '.$user_email.' subject="'. $subject .'" result='.var_export($ok,true));
+        return (bool) $ok;
+    }
+
 }

@@ -25,7 +25,6 @@
     var linked = (window.storelinkformc_checkout_vars && window.storelinkformc_checkout_vars.linked_player) || '';
     var isGift = !!(gift && gift.checked);
 
-    // helpers
     function enableEditableBlankRequired() {
       input.removeAttribute('disabled');
       input.removeAttribute('readonly');
@@ -33,14 +32,14 @@
       input.readOnly = false;
       input.required = true;
       input.setAttribute('aria-required', 'true');
-      input.value = ''; // siempre en blanco al marcar gift
+      input.value = '';
       setLabel('Minecraft Username *');
       addRequiredUI();
     }
 
     function makeReadonlyLinked() {
       input.removeAttribute('disabled');
-      input.disabled = false;     // para que envíe el valor
+      input.disabled = false;
       input.readOnly = true;
       input.required = false;
       input.removeAttribute('aria-required');
@@ -65,21 +64,37 @@
     if (isGift) {
       enableEditableBlankRequired();
     } else {
-      if (linked) {
-        makeReadonlyLinked();
-      } else {
-        disableNoLinked();
-      }
+      if (linked) makeReadonlyLinked();
+      else disableNoLinked();
     }
   }
 
   function init() {
-    var gift = any('#billing_minecraft_gift');
-    updateState();
+    var gift  = any('#billing_minecraft_gift');
+    var input = any('#billing_minecraft_username');
 
+    // --- NEW: honor plugin setting force_link ---
+    var forceLink = (window.storelinkformc_checkout_vars && window.storelinkformc_checkout_vars.force_link === 'yes');
+
+    if (!forceLink) {
+      // Modo libre: editable + obligatorio siempre y ocultar gift
+      if (gift && gift.closest('.form-row')) gift.closest('.form-row').style.display = 'none';
+      if (input) {
+        input.disabled = false;
+        input.readOnly = false;
+        input.required = true;
+        input.removeAttribute('readonly');
+        input.removeAttribute('disabled');
+        var field = $('#billing_minecraft_username_field') || $('#minecraft_username_field');
+        if (field) field.classList.add('validate-required');
+      }
+      return; // no aplicar lógica de gift/linked
+    }
+
+    // Modo clásico
+    updateState();
     if (gift) gift.addEventListener('change', updateState);
 
-    // Re-aplica tras fragment refresh de WooCommerce
     if (window.jQuery) {
       window.jQuery(document.body).on('updated_checkout', updateState);
     }

@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.0.27
+Stable tag: 1.0.28
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,26 +63,40 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.27 =
+= Version 1.0.28 =
 
-- Added automatic database table creation on plugin activation.
-- Added silent self-repair routine to recreate missing tables when detected.
-- Added automatic replacement of WooCommerce Checkout with the `[woocommerce_checkout]` shortcode on activation for full compatibility.
-- Added manual "Rebuild Tables" and "Force Classic Checkout" buttons in the plugin settings page.
-- Added localized greeting and delivery message on the order confirmation page, showing the player’s Minecraft username and delivery notice for synced or gifted items.
-- Improved Minecraft checkout field behavior:
-  - Field now becomes editable only when “🎁 This is a gift” is selected.
-  - Field automatically clears when gifting and shows proper placeholder.
-  - Dynamic label updates to reflect “required”, “auto-linked”, or “disabled” states.
-- Improved JavaScript logic to reapply checkout field state after WooCommerce AJAX refresh.
-- Improved English UI and help texts across admin pages and checkout labels for clarity.
-- Fixed optional/required inconsistencies in the Minecraft username field under different user states.
-- Fixed delivery confirmation text not showing the recipient name for gifted purchases.
-- Fixed minor layout inconsistencies in admin settings sections.
-- Changed internal script enqueue logic for better compatibility with recent WooCommerce versions.
-- Changed activation routine to automatically enforce classic checkout template when using block-based checkout.
-- Cleaned up code structure and minor performance optimizations.
-
+- Added new “Force Minecraft account linking” option in plugin settings (enabled by default).
+- Added ability to disable forced linking, replacing the “Gift” option with a direct Minecraft Username field at checkout.
+- Added unified order metadata using `_slmc_target_type` (`linked`, `gift`, or `manual_username`) and a consistent `_minecraft_username` value.
+- Added server-side Minecraft username verification respecting the “Premium / Any” policy, including PlayerDB lookup for Premium-only mode.
+- Added detailed logging around /request-link API requests and wp_mail() results for easier debugging.
+- Added friendly API response when the player’s email is not registered on WordPress (no longer silent).
+- Added new Email Templates admin page with full visual editor (TinyMCE + Media Library support).
+- Added support for customizable email subject and HTML body with placeholders: {site_name}, {user_email}, {verify_code}, {link_url}, and {player}.
+- Added default responsive HTML email template with inline styles for better client compatibility.
+- Added “Insert default” and “Reset to defaults” buttons for quick template management.
+- Improved checkout UI and logic:
+  - Field is now always visible and required when linking is disabled or a gift is selected.
+  - Gift option automatically hides when force linking is off.
+  - JavaScript updated to respect the new `force_link` flag and reduce field flicker.
+  - Username is now prefilled and readonly when a linked account is detected.
+- Improved “Thank You” page message:
+  - Uses `_slmc_target_type` to correctly show delivery recipient.
+  - Adds delivery info for both gift and manual username orders.
+- Improved admin and email order views to always prioritize the order’s `_minecraft_username` over the user’s linked account.
+- Improved delivery generation logic to use `_slmc_target_type` with full backward compatibility for `_minecraft_gift`.
+- Improved error logging with player, email, and IP details for better traceability.
+- Improved email sending logic to automatically replace placeholders and support {player} in messages.
+- Improved content sanitization and HTML whitelisting to allow safe use of tables, inline styles, and images.
+- Fixed checkbox in settings to correctly store “no” value when unchecked.
+- Fixed missing bracket issue in `register_setting`.
+- Fixed minor layout inconsistencies in checkout username field.
+- Fixed issue where /request-link would silently fail if the WordPress user didn’t exist.
+- Fixed potential email-sending failures now clearly logged to debug.log.
+- Fixed email delivery issue by adding explicit From header and HTML content type in wp_mail().
+- Fixed Cloudflare IP handling in rate-limiting to prevent false 429 errors.
+- Cleaned up and optimized internal logic for better maintainability and WooCommerce compatibility.
+- Verified successful email sending and linking flow between Minecraft and WordPress.
 
 
 == License ==

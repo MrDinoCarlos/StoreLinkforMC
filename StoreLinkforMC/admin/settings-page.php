@@ -7,11 +7,11 @@ add_action('admin_init', 'storelinkformc_settings_init');
 function storelinkformc_add_admin_menu() {
     add_menu_page(
         'storelinkformc Settings',
-        'storelinkformc',
+        'StoreLinkforMC',
         'manage_options',
         'storelinkformc',
         'storelinkformc_options_page',
-        'dashicons-admin-network'
+        'dashicons-cart'
     );
 
     add_submenu_page(
@@ -25,6 +25,7 @@ function storelinkformc_add_admin_menu() {
             storelinkformc_sync_roles_page();
         }
     );
+
 }
 
 function storelinkformc_settings_init() {
@@ -33,6 +34,12 @@ function storelinkformc_settings_init() {
         'type' => 'string',
         'sanitize_callback' => function($v){ return in_array($v, ['premium','any'], true) ? $v : 'premium'; },
         'default' => 'premium',
+    ]);
+    // === Force link or not ===
+    register_setting('storelinkformc_settings', 'storelinkformc_force_link', [
+        'type' => 'string',
+        'sanitize_callback' => function($v){ return $v === 'no' ? 'no' : 'yes'; },
+        'default' => 'yes',
     ]);
 
     // API Token
@@ -69,12 +76,36 @@ function storelinkformc_settings_init() {
     );
 
     add_settings_field(
+        'storelinkformc_force_link',
+        'Force Minecraft account linking',
+        function () {
+            $val = get_option('storelinkformc_force_link', 'yes');
+            ?>
+            <!-- Para que al desmarcar se guarde "no" -->
+            <input type="hidden" name="storelinkformc_force_link" value="no" />
+            <label>
+                <input type="checkbox" name="storelinkformc_force_link" value="yes" <?php checked($val, 'yes'); ?> />
+                Require a linked account or use the “Gift” option (default).
+            </label>
+            <p class="description">
+                If unchecked, checkout will ask directly for a Minecraft username (still validated against the Premium/Any policy).
+            </p>
+            <?php
+        },
+        'storelinkformc_settings',
+        'storelinkformc_section_usernames'
+    );
+
+
+
+    add_settings_field(
         'storelinkformc_username_policy',
         'Allowed usernames',
         'storelinkformc_username_policy_render',
         'storelinkformc_settings',
         'storelinkformc_section_usernames'
     );
+
 }
 
 function storelinkformc_api_token_render() {

@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://nocticraft.com/minecraftstorelink
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.27
+Version: 1.0.28
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos
@@ -20,8 +20,19 @@ require_once plugin_dir_path(__FILE__) . 'admin/products-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/deliveries-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/checkout-fields-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/sync-roles-page.php';
+require_once plugin_dir_path(__FILE__) . 'admin/email-templates-page.php';
 require_once plugin_dir_path(__FILE__) . 'linking-api.php';
 require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-order-fields.php';
+require_once plugin_dir_path(__FILE__) . 'includes/cache-compat.php';
+require_once plugin_dir_path(__FILE__) . 'includes/cloudflare-api.php';
+require_once plugin_dir_path(__FILE__) . 'admin/cdn-cache-page.php';
+
+
+if (!function_exists('storelinkformc_force_link_enabled')) {
+    function storelinkformc_force_link_enabled(): bool {
+        return get_option('storelinkformc_force_link', 'yes') === 'yes';
+    }
+}
 
 // === INSTALL / SELF-HEAL =====================================================
 register_activation_hook(__FILE__, 'storelinkformc_install');
@@ -179,40 +190,48 @@ function storelinkformc_create_pending_delivery($order_id) {
 
     global $wpdb;
     $user_id = $order->get_user_id();
-    $gift = get_post_meta($order_id, '_minecraft_gift', true);
-    $gift_to = get_post_meta($order_id, '_minecraft_username', true);
 
-    if ($gift === 'yes' && !empty($gift_to)) {
-        $player_name = sanitize_text_field($gift_to);
+    // NUEVO: leer el meta unificado
+    $target_type = get_post_meta($order_id, '_slmc_target_type', true); // 'gift' | 'linked' | 'manual_username'
+    $player_name = '';
+
+    if ($target_type === 'gift' || $target_type === 'manual_username') {
+        $player_name = sanitize_text_field(get_post_meta($order_id, '_minecraft_username', true));
+    } elseif ($target_type === 'linked') {
+        $player_name = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
     } else {
-        $player_name = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+        // compat legacy
+        $gift = get_post_meta($order_id, '_minecraft_gift', true);
+        $gift_to = get_post_meta($order_id, '_minecraft_username', true);
+        if ($gift === 'yes' && !empty($gift_to)) {
+            $player_name = sanitize_text_field($gift_to);
+        } else {
+            $player_name = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+        }
     }
 
-    if (empty($player_name) || !is_string($player_name)) return;
+    if (empty($player_name)) return;
 
     $allowed_products = get_option('storelinkformc_sync_products', []);
-    $product_roles = get_option('storelinkformc_product_roles_map', []);
-    $user = new WP_User($user_id);
+    $product_roles    = get_option('storelinkformc_product_roles_map', []);
+    $user             = new WP_User($user_id);
 
     foreach ($order->get_items() as $item) {
         $product_id = $item->get_product_id();
 
-        // Asignar rol si corresponde
+        // Roles
         if (isset($product_roles[$product_id])) {
             $role = sanitize_text_field($product_roles[$product_id]);
-            if (!user_can($user_id, $role)) {
-                $user->add_role($role);
-            }
+            if (!user_can($user_id, $role)) $user->add_role($role);
         }
 
         if (!in_array($product_id, $allowed_products)) continue;
 
         $product_name = sanitize_text_field(strtolower($item->get_name()));
-        $quantity = intval($item->get_quantity());
+        $quantity     = (int) $item->get_quantity();
 
         $exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries
-             WHERE order_id = %d AND player = %s AND item = %s",
+            "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries WHERE order_id=%d AND player=%s AND item=%s",
             $order_id, $player_name, $product_name
         ));
         if ($exists) continue;
@@ -224,9 +243,10 @@ function storelinkformc_create_pending_delivery($order_id) {
             'amount'    => $quantity,
             'delivered' => 0,
             'timestamp' => current_time('mysql')
-        ], ['%d', '%s', '%s', '%d', '%d', '%s']);
+        ], ['%d','%s','%s','%d','%d','%s']);
     }
 }
+
 
 // ❌ Eliminar roles si el pedido falla, se cancela o se reembolsa
 add_action('woocommerce_order_status_cancelled', 'storelinkformc_remove_roles_for_order');
@@ -254,7 +274,10 @@ function storelinkformc_remove_roles_for_order($order_id) {
 
 // 📧 Mostrar username de Minecraft en emails
 add_filter('woocommerce_email_order_meta_fields', function ($fields, $sent_to_admin, $order) {
-    $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
+    $player = get_post_meta($order->get_id(), '_minecraft_username', true);
+    if (!$player) {
+        $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
+    }
     if ($player) {
         $fields['minecraft_player'] = ['label' => 'Minecraft Username', 'value' => $player];
     }
@@ -263,7 +286,10 @@ add_filter('woocommerce_email_order_meta_fields', function ($fields, $sent_to_ad
 
 // 🧾 Mostrar en admin > pedidos
 add_action('woocommerce_admin_order_data_after_billing_address', function ($order) {
-    $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
+    $player = get_post_meta($order->get_id(), '_minecraft_username', true);
+    if (!$player) {
+        $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
+    }
     if ($player) {
         echo '<p><strong>Minecraft Username:</strong> ' . esc_html($player) . '</p>';
     }
@@ -341,7 +367,9 @@ function storelinkformc_enqueue_checkout_script() {
 
     wp_localize_script('storelinkformc-checkout', 'storelinkformc_checkout_vars', [
         'linked_player' => $linked_player,
+        'force_link'    => storelinkformc_force_link_enabled() ? 'yes' : 'no',
     ]);
+
 }
 
 
