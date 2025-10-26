@@ -87,9 +87,7 @@ function storelinkformc_render_deliveries_page() {
             } elseif (isset($_POST['mark_undelivered'])) {
                 $wpdb->update($table, ['delivered' => 0], ['id' => $id]);
                 echo '<div class="updated"><p>Marked as undelivered.</p></div>';
-            } elseif (isset($_POST['delete_delivery'])) {
-                $wpdb->delete($table, ['id' => $id]);
-                echo '<div class="updated"><p>Deleted successfully.</p></div>';
+
             } elseif (isset($_POST['save_edit'])) {
                 $player = sanitize_text_field(wp_unslash($_POST['player'] ?? ''));
                 $item = sanitize_text_field(wp_unslash($_POST['item'] ?? ''));
@@ -103,6 +101,34 @@ function storelinkformc_render_deliveries_page() {
 
                 echo '<div class="updated"><p>Updated successfully.</p></div>';
             }
+            // 🗑 Delete delivery + WooCommerce order
+            if (isset($_POST['delete_delivery'])) {
+                // 1) Read the order_id for this delivery
+                $order_id = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT order_id FROM $table WHERE id = %d",
+                    $id
+                ));
+
+                // 2) Delete WooCommerce order (permanent). Use false if you prefer trash.
+                if ($order_id && function_exists('wc_get_order')) {
+                    $order = wc_get_order($order_id);
+                    if ($order) {
+                        $deleted = $order->delete(false); // true = permanently delete, false = move to trash
+                        if (is_wp_error($deleted)) {
+                            echo '<div class="notice notice-error"><p>Could not delete WooCommerce order #' . esc_html($order_id) . ': ' . esc_html($deleted->get_error_message()) . '</p></div>';
+                        }
+                    }
+                }
+
+                // 3) Delete the delivery row from plugin table
+                $deleted_row = $wpdb->delete($table, ['id' => $id], ['%d']);
+                if ($deleted_row === false) {
+                    echo '<div class="notice notice-error"><p>Could not delete delivery record (ID ' . esc_html($id) . ').</p></div>';
+                } else {
+                    echo '<div class="updated"><p>Delivery record and (if it existed) the WooCommerce order were deleted.</p></div>';
+                }
+            }
+
         }
     }
 
@@ -219,6 +245,7 @@ function storelinkformc_render_deliveries_page() {
         } else {
             echo '<button class="button" name="edit_delivery" value="' . esc_attr($id) . '">✏ Edit</button> ';
             echo '<button class="button" name="' . ($row->delivered ? 'mark_undelivered' : 'mark_delivered') . '">' . ($row->delivered ? '❌ Unmark' : '✔ Mark') . '</button> ';
+            echo '<button class="button button-secondary" name="delete_delivery" value="' . esc_attr($id) . '" onclick="return confirm(\'This will permanently delete the delivery record and the WooCommerce order. Continue?\');">🗑 Delete</button> ';
         }
 
         echo '</td></form></tr>';

@@ -1,9 +1,9 @@
 <?php
 /*
 Plugin Name: StoreLink for Minecraft by MrDino
-Plugin URI: https://nocticraft.com/minecraftstorelink
+Plugin URI: https://mrdino.es/woostorelink-plugin/
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.28
+Version: 1.0.29
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos

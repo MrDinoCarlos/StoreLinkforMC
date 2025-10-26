@@ -169,6 +169,12 @@ add_action('admin_enqueue_scripts', function ($hook) {
 
 // Enforce linking (self-purchase) vs gift + policy
 add_action('woocommerce_checkout_process', function () {
+
+    // 👇 NUEVO: respeta la opción "Force linking"
+    if (function_exists('storelinkformc_force_link_enabled') && !storelinkformc_force_link_enabled()) {
+        // Si NO se exige vinculación, no bloquear (deja que valide el frontend)
+        return;
+    }
     // If you disabled the custom fields in settings, skip
     $allowed = get_option('storelinkformc_checkout_fields', []);
     $has_username_field = in_array('minecraft_username', $allowed, true);
@@ -245,6 +251,11 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
 
 // Show an info notice on checkout: link account if NOT gifting
 add_action('woocommerce_before_checkout_form', function () {
+    // ⛔ No mostrar avisos si NO se exige vinculación
+    if (function_exists('storelinkformc_force_link_enabled') && !storelinkformc_force_link_enabled()) {
+        return;
+    }
+
     if ( ! function_exists('wc_print_notice') || ! is_checkout() ) return;
 
     // Only show if your Minecraft fields are in use
@@ -274,6 +285,11 @@ add_action('woocommerce_before_checkout_form', function () {
 
 // Hide the notice automatically when "gift" is checked (and show it back if unchecked)
 add_action('wp_enqueue_scripts', function () {
+    // ⛔ No cargar el JS si NO se exige vinculación
+    if (function_exists('storelinkformc_force_link_enabled') && !storelinkformc_force_link_enabled()) {
+        return;
+    }
+
     if ( ! is_checkout() ) return;
 
     // Make sure jQuery is available
