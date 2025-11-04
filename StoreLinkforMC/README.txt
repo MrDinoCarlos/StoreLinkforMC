@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.0.29
+Stable tag: 1.0.30
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,12 +63,18 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.29 =
+= Version 1.0.30 =
 
-- Added new delete button at the deliveries page. This deletes the pending/processed delivery + the woocommerce order.
-- Fixed issue where checkout still required account linking even when force linking was disabled.
-- Fixed duplicate informational and error notices appearing on the checkout page.
-- Fixed unnecessary checkout blocking when entering a manual Minecraft username.
+- Added player head preview to the "Minecraft Account Link" page. Displays the linked player’s head or a question mark if not linked.
+- Added redesigned "Unlink Minecraft Account" button with warning styling to better indicate the action.
+- Added help box on the account link screen explaining how to link accounts via in-game command.
+- Added Minecraft head preview in WooCommerce checkout. Shows the linked player’s head by default.
+- Added dynamic head preview for gift orders. When “This is a gift” is checked, the head updates live based on the entered recipient username.
+- Added support for username policy (Premium / Any) in the checkout preview so only valid premium usernames show the correct head when premium-only is enabled.
+- Improved sanitization and cache-busting for skin previews to ensure the correct head is always shown.
+- Fixed account-linking email delivery to go through the configured SMTP settings from the plugin, reducing cases where WordPress/host blocks or drops the mail.
+- Fixed account-linking flow to use the custom email template + SMTP combo so players actually receive the link code.
+
 
 == License ==
 

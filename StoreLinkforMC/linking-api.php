@@ -93,9 +93,15 @@ function storelinkformc_request_link($request) {
     ], HOUR_IN_SECONDS);
 
     $link_url = slmc_build_link_url($email, (string)$code);
-    slmc_send_linking_email($email, (string)$code, $link_url, $player);
+    $ok = slmc_send_linking_email($email, (string)$code, $link_url, $player);
+
+    if (!$ok) {
+        // Devuelve error real al cliente (Minecraft lo mostrará en el chat)
+        return new WP_REST_Response(['error' => 'Email could not be sent. Check mail/SMTP configuration.'], 500);
+    }
 
     return new WP_REST_Response(['success' => true, 'message' => 'Verification code sent.'], 200);
+
 }
 
 // ✅ Verificar código y vincular cuenta
@@ -308,15 +314,14 @@ if (!function_exists('slmc_send_linking_email')) {
     /**
      * Envía el email usando wp_mail() (lo que tenga tu WP/hosting o plugin SMTP).
      * Usa las plantillas guardadas en opciones.
+     * No fuerces el "From:" aquí: deja que el plugin SMTP lo gestione.
      */
     function slmc_send_linking_email(string $user_email, string $verify_code, string $link_url, string $player = ''): bool {
         $site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
-        $domain    = parse_url(home_url(), PHP_URL_HOST);
-        if (!$domain) { $domain = $_SERVER['HTTP_HOST'] ?? 'localhost'; }
 
         $subject_tpl = get_option('slmc_tpl_link_subject', 'Link your Minecraft account on {site_name}');
         $body_tpl    = get_option('slmc_tpl_link_html',
-            '<p>Hello,</p>'.
+            '<p>Hello {player},</p>'.
             '<p>Use this code: <strong>{verify_code}</strong> to link your account.</p>'.
             '<p><a href="{link_url}">{link_url}</a></p>'.
             '<p>— {site_name}</p>'
@@ -327,21 +332,60 @@ if (!function_exists('slmc_send_linking_email')) {
             '{user_email}'  => $user_email,
             '{verify_code}' => $verify_code,
             '{link_url}'    => $link_url,
-            '{player}'      => $player,           // <-- nuevo placeholder
+            '{player}'      => $player,
         ];
 
         $subject = strtr($subject_tpl, $repl);
         $body    = strtr($body_tpl, $repl);
 
-        $from_email = 'no-reply@' . $domain;
-        $headers   = [
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . $site_name . ' <' . $from_email . '>',
-        ];
+        // HTML via filtro oficial (no headers manuales)
+        add_filter('wp_mail_content_type', 'slmc_mail_content_type_html');
+        $ok = wp_mail($user_email, $subject, $body);
+        remove_filter('wp_mail_content_type', 'slmc_mail_content_type_html');
 
-        $ok = wp_mail($user_email, $subject, $body, $headers);
         error_log('[SLMC] wp_mail to '.$user_email.' subject="'. $subject .'" result='.var_export($ok,true));
         return (bool) $ok;
     }
-
 }
+
+/**
+ * ✅ Show Minecraft head inside checkout field
+ * This uses the same user meta we already use: "minecraft_player"
+ */
+add_action('wp_head', function () {
+    // Solo en frontend, checkout y usuario logueado
+    if (!function_exists('is_checkout') || !is_checkout() || !is_user_logged_in()) {
+        return;
+    }
+
+    // Sacamos el nick vinculado
+    $user_id = get_current_user_id();
+    $player  = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+
+    // Avatar según si tiene o no
+    $avatar_url = $player
+        ? 'https://mc-heads.net/avatar/' . rawurlencode($player) . '/40'
+        : 'https://mc-heads.net/avatar/MHF_Question/40';
+
+    ?>
+    <style>
+    /* IMPORTANTE: este id debe ser el del campo de Minecraft en tu checkout */
+    #storelinkformc_minecraft_username {
+        background-image: url('<?php echo esc_url($avatar_url); ?>');
+        background-repeat: no-repeat;
+        background-position: 10px center;
+        background-size: 34px 34px;
+        padding-left: 54px !important; /* sitio para la cabeza */
+    }
+    </style>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // mismo id que en el CSS de arriba
+        var input = document.getElementById('storelinkformc_minecraft_username');
+        if (input) {
+            input.title = <?php echo $player ? json_encode($player) : json_encode('No linked player'); ?>;
+        }
+    });
+    </script>
+    <?php
+});

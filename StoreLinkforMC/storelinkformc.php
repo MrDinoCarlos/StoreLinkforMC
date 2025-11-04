@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://mrdino.es/woostorelink-plugin/
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.29
+Version: 1.0.30
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos
@@ -26,6 +26,14 @@ require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-order-fields.php'
 require_once plugin_dir_path(__FILE__) . 'includes/cache-compat.php';
 require_once plugin_dir_path(__FILE__) . 'includes/cloudflare-api.php';
 require_once plugin_dir_path(__FILE__) . 'admin/cdn-cache-page.php';
+require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-checkout-avatar.php';
+
+
+// Load admin SMTP notice (safe include)
+$__slmc_admin_notice = plugin_dir_path(__FILE__) . 'includes/admin-smtp-notice.php';
+if (file_exists($__slmc_admin_notice)) {
+    require_once $__slmc_admin_notice;
+}
 
 
 if (!function_exists('storelinkformc_force_link_enabled')) {
@@ -303,21 +311,63 @@ function storelinkformc_render_account_sync_page() {
     }
 
     $user_id = get_current_user_id();
-    $player = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+    $player  = sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true));
+
+    $avatar_url = $player
+        ? 'https://mc-heads.net/avatar/' . rawurlencode($player) . '/64'
+        : 'https://mc-heads.net/avatar/MHF_Question/64';
 
     ob_start(); ?>
-
-    <div class="storelinkformc-sync-wrapper">
-        <h2>Minecraft Account Link</h2>
-
-        <?php if ($player): ?>
-            <p>✅ Your account is linked to: <strong><?php echo esc_html($player); ?></strong></p>
-            <button id="storelinkformc-unlink-button" class="button button-danger">Unlink Minecraft Account</button>
-        <?php else: ?>
-            <p>⛔ You don’t have a Minecraft account linked. Go to the server and type /wsl wp-link (email) and verify with /wsl wp-verify (code)</p>
-        <?php endif; ?>
+    <div class="storelinkformc-sync-wrapper" style="display:flex;align-items:center;gap:12px;margin:1rem 0;">
+        <div class="storelinkformc-avatar" style="width:64px;height:64px;flex:0 0 64px;">
+            <img src="<?php echo esc_url($avatar_url); ?>"
+                 alt="Minecraft head"
+                 title="<?php echo $player ? esc_attr($player) : 'No linked player'; ?>"
+                 style="width:64px;height:64px;border-radius:6px;image-rendering:pixelated;display:block;transition:transform 0.2s ease;">
+        </div>
+        <div class="storelinkformc-info">
+            <?php if ($player): ?>
+                <p style="margin:0 0 6px;">
+                    ✅ Your account is linked to: <strong><?php echo esc_html($player); ?></strong>
+                </p>
+                <button id="storelinkformc-unlink-button" class="storelinkformc-danger-btn" type="button">
+                    🔓 Unlink Minecraft Account
+                </button>
+            <?php else: ?>
+                <p style="margin:0 0 8px;">
+                    ⛔ You don’t have a Minecraft account linked yet.
+                </p>
+                <div class="storelinkformc-help-box" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:13px;color:#374151;line-height:1.4;">
+                    💡 <strong>How to link your account:</strong><br>
+                    Join our Minecraft server and run this command:<br>
+                    <code style="background:#111827;color:#f9fafb;padding:2px 6px;border-radius:4px;">/wsl wp-link &lt;your_email&gt;</code><br>
+                    (Use the same email you registered on this website)
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
 
+    <style>
+    .storelinkformc-danger-btn {
+        background: #dc2626;
+        color: #fff;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        line-height: 1.2;
+        box-shadow: 0 2px 4px rgba(0,0,0,.12);
+        transition: background .15s ease, transform .15s ease;
+    }
+    .storelinkformc-danger-btn:hover {
+        background: #b91c1c;
+        transform: translateY(-1px);
+    }
+    .storelinkformc-danger-btn:active {
+        transform: translateY(0);
+    }
+    </style>
     <?php
     return ob_get_clean();
 }
