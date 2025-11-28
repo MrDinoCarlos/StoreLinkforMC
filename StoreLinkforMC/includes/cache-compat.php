@@ -1,5 +1,7 @@
 <?php
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 /**
  * Cache compatibility layer for StoreLinkforMC
@@ -11,34 +13,57 @@ if (!defined('ABSPATH')) exit;
 
 // 1) Runtime signals/headers for our endpoints
 add_action('init', function () {
-    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $uri = '';
+    if (isset($_SERVER['REQUEST_URI'])) {
+        $uri = wp_unslash((string) $_SERVER['REQUEST_URI']);
+    }
+
     $is_storelink_endpoint = false;
 
-    if (isset($uri)) {
+    if ($uri !== '') {
         // Pretty permalinks: /wp-json/storelinkformc/v1/...
         if (str_starts_with($uri, '/wp-json/storelinkformc/v1/')) {
             $is_storelink_endpoint = true;
         }
+
         // Fallback REST (?rest_route=) or manual trigger with ?storelinkformc=1
         if (!$is_storelink_endpoint) {
-            $q = $_GET ?? array();
+            $q = [];
+            if (!empty($_GET) && is_array($_GET)) {
+                $q = wp_unslash($_GET);
+            }
+
             if (!empty($q['storelinkformc'])) {
                 $is_storelink_endpoint = true;
-            } elseif (!empty($q['rest_route']) && str_starts_with((string)$q['rest_route'], '/storelinkformc/')) {
+            } elseif (!empty($q['rest_route']) && str_starts_with((string) $q['rest_route'], '/storelinkformc/')) {
                 $is_storelink_endpoint = true;
             }
         }
     }
 
-    if (!$is_storelink_endpoint) return;
+    if (!$is_storelink_endpoint) {
+        return;
+    }
 
     // Signals respected by most cache/CDN plugins
-    if (!defined('DONOTCACHE_PAGE')) define('DONOTCACHE_PAGE', true);
-    if (!defined('DONOTCACHE_OBJECT')) define('DONOTCACHE_OBJECT', true);
-    if (!defined('DONOTMINIFY')) define('DONOTMINIFY', true);
-    if (!defined('DONOTCDN')) define('DONOTCDN', true);
-    if (!defined('DONOTROCKETCACHE')) define('DONOTROCKETCACHE', true);
-    if (!defined('DONOTROCKETOPTIMIZE')) define('DONOTROCKETOPTIMIZE', true);
+    if (!defined('DONOTCACHE_PAGE')) {
+        define('DONOTCACHE_PAGE', true);
+    }
+    if (!defined('DONOTCACHE_OBJECT')) {
+        define('DONOTCACHE_OBJECT', true);
+    }
+    if (!defined('DONOTMINIFY')) {
+        define('DONOTMINIFY', true);
+    }
+    if (!defined('DONOTCDN')) {
+        define('DONOTCDN', true);
+    }
+    if (!defined('DONOTROCKETCACHE')) {
+        define('DONOTROCKETCACHE', true);
+    }
+    if (!defined('DONOTROCKETOPTIMIZE')) {
+        define('DONOTROCKETOPTIMIZE', true);
+    }
 
     // Conservative headers for dynamic content
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true);
@@ -58,11 +83,13 @@ add_action('init', function () {
 // 1b) Reinforce headers when serving REST responses
 add_filter('rest_pre_serve_request', function ($served, $result, $request, $server) {
     $route = method_exists($request, 'get_route') ? $request->get_route() : '';
+
     if (is_string($route) && str_starts_with($route, '/storelinkformc/v1/')) {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true);
         header('X-LiteSpeed-Cache-Control: no-cache', true);
         header('X-Accel-Expires: 0', true);
     }
+
     return $served;
 }, 10, 4);
 
@@ -71,6 +98,7 @@ register_activation_hook(dirname(__DIR__) . '/storelinkformc.php', function () {
     if (!function_exists('is_plugin_active')) {
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
     }
+
     if (function_exists('is_plugin_active') && is_plugin_active('litespeed-cache/litespeed-cache.php')) {
         update_option('storelinkformc_needs_lscache_exclusion', 1);
     }
@@ -81,12 +109,16 @@ register_activation_hook(dirname(__DIR__) . '/storelinkformc.php', function () {
 
 // 3) Admin notice showing recommended cache exclusions
 add_action('admin_notices', function () {
-    if (!current_user_can('manage_options')) return;
+    if (!current_user_can('manage_options')) {
+        return;
+    }
 
     $needs_ls = (bool) get_option('storelinkformc_needs_lscache_exclusion');
     $needs_wr = (bool) get_option('storelinkformc_needs_rocket_exclusion');
 
-    if (!$needs_ls && !$needs_wr) return;
+    if (!$needs_ls && !$needs_wr) {
+        return;
+    }
 
     $pattern_pretty = home_url('/wp-json/storelinkformc/*');
     $pattern_rest   = home_url('/?rest_route=/storelinkformc/*');

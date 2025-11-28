@@ -1,5 +1,7 @@
 <?php
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 /**
  * Show Minecraft head inside checkout field
@@ -7,7 +9,14 @@ if (!defined('ABSPATH')) exit;
  * - si es regalo, muestra la cabeza del destinatario en tiempo real
  */
 add_action('wp_footer', function () {
-    if (!function_exists('is_checkout') || !is_checkout()) return;
+    if (!function_exists('is_checkout') || !is_checkout()) {
+        return;
+    }
+
+    // If the cart does not contain synced products, do not load the Minecraft avatar widget
+    if (!function_exists('storelinkformc_cart_has_synced_products') || !storelinkformc_cart_has_synced_products()) {
+        return;
+    }
 
     $user_id = get_current_user_id();
     $player  = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
@@ -38,7 +47,9 @@ add_action('wp_footer', function () {
             document.getElementById('minecraft_username') ||
             document.querySelector('input[name="billing[minecraft_username]"]');
 
-        if (!usernameInput) return;
+        if (!usernameInput) {
+            return;
+        }
 
         // localizar checkbox de regalo
         let giftCheckbox =
@@ -52,17 +63,21 @@ add_action('wp_footer', function () {
             document.querySelectorAll('label').forEach(function (label) {
                 if (!giftCheckbox && /gift/i.test(label.textContent)) {
                     const inside = label.querySelector('input[type="checkbox"]');
-                    if (inside) giftCheckbox = inside;
+                    if (inside) {
+                        giftCheckbox = inside;
+                    }
                     const forAttr = label.getAttribute('for');
                     if (!giftCheckbox && forAttr) {
                         const byFor = document.getElementById(forAttr);
-                        if (byFor && byFor.type === 'checkbox') giftCheckbox = byFor;
+                        if (byFor && byFor.type === 'checkbox') {
+                            giftCheckbox = byFor;
+                        }
                     }
                 }
             });
         }
 
-        const linkedAvatar = '<?php echo esc_js($default_avatar); ?>';
+        const linkedAvatar   = '<?php echo esc_js($default_avatar); ?>';
         const questionAvatar = 'https://mc-heads.net/avatar/MHF_Question/40';
         const usernamePolicy = '<?php echo esc_js($username_policy); ?>';
 
@@ -120,7 +135,7 @@ add_action('wp_footer', function () {
         }
 
         // eventos
-        ['input','keyup','change','blur'].forEach(evt => {
+        ['input', 'keyup', 'change', 'blur'].forEach(function (evt) {
             usernameInput.addEventListener(evt, updateAvatarFromInput);
         });
         if (giftCheckbox) {

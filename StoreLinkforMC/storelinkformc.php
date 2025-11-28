@@ -3,18 +3,21 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://mrdino.es/woostorelink-plugin/
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.30
+Version: 1.0.31
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
+Text Domain: StoreLinkforMC
+Domain Path: /languages
 */
+
 
 if (!defined('ABSPATH')) exit;
 if (!defined('STORELINKFORMC_PRO')) define('STORELINKFORMC_PRO', false);
 
-// 📂 Incluir páginas administrativas
+// Incluir páginas administrativas
 require_once plugin_dir_path(__FILE__) . 'admin/settings-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/products-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/deliveries-page.php';
@@ -30,15 +33,52 @@ require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-checkout-avatar.p
 
 
 // Load admin SMTP notice (safe include)
-$__slmc_admin_notice = plugin_dir_path(__FILE__) . 'includes/admin-smtp-notice.php';
-if (file_exists($__slmc_admin_notice)) {
-    require_once $__slmc_admin_notice;
+$storelinkformc_admin_notice = plugin_dir_path(__FILE__) . 'includes/admin-smtp-notice.php';
+if (file_exists($storelinkformc_admin_notice)) {
+    require_once $storelinkformc_admin_notice;
 }
 
 
 if (!function_exists('storelinkformc_force_link_enabled')) {
     function storelinkformc_force_link_enabled(): bool {
         return get_option('storelinkformc_force_link', 'yes') === 'yes';
+    }
+}
+
+if (!function_exists('storelinkformc_cart_has_synced_products')) {
+    /**
+     * Returns true if the current WooCommerce cart contains
+     * at least one product that is synced with StoreLinkMC.
+     */
+    function storelinkformc_cart_has_synced_products(): bool {
+        if (!function_exists('WC')) {
+            return false;
+        }
+
+        $wc = WC();
+        if (!$wc || !isset($wc->cart) || !is_a($wc->cart, 'WC_Cart')) {
+            return false;
+        }
+
+        $synced_products = get_option('storelinkformc_sync_products', []);
+
+        if (empty($synced_products) || !is_array($synced_products)) {
+            return false;
+        }
+
+        foreach ($wc->cart->get_cart() as $cart_item) {
+            $product_id   = isset($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+            $variation_id = isset($cart_item['variation_id']) ? (int) $cart_item['variation_id'] : 0;
+
+            if ($product_id && in_array($product_id, $synced_products, true)) {
+                return true;
+            }
+            if ($variation_id && in_array($variation_id, $synced_products, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -105,7 +145,8 @@ function storelinkformc_force_classic_checkout($force = false) {
     $shortcode = '[woocommerce_checkout]';
 
     // ¿Ya está correcto?
-    $has_shortcode = (false !== strpos($post->post_content, $shortcode));
+    $has_shortcode = (false !== strpos($post->post_content, $shortcode))
+        || (function_exists('has_shortcode') && has_shortcode($post->post_content, 'woocommerce_checkout'));
     $has_block     = (function_exists('has_blocks') && has_blocks($post));
 
     if ($force || $has_block || ! $has_shortcode) {
@@ -160,22 +201,22 @@ function storelinkformc_checkout_blocks_notice() {
     echo '<div class="notice notice-warning is-dismissible storelinkformc-dismissable" data-nonce="' . esc_attr($nonce) . '">
         <p>⚠️ <strong>StoreLink for MC:</strong> The new WooCommerce block-based checkout is not compatible with this plugin.
         Please edit the Checkout page and replace it with the <code>[woocommerce_checkout]</code> shortcode.
-        <a href="' . esc_url($url_force) . '" class="button button-secondary" style="margin-left:8px;">Forzar ahora</a></p>
+        <a href="' . esc_url($url_force) . '" class="button button-secondary" style="margin-left:8px;">Force Now</a></p>
     </div>';
 }
 
-add_action('admin_enqueue_scripts', function ($hook) {
+add_action('admin_enqueue_scripts', function () {
     // Cargar solo en admin (es liviano y se ata a jQuery de WP)
     wp_enqueue_script('jquery');
-    $js = <<<JS
-jQuery(document).on('click', '.storelinkformc-dismissable .notice-dismiss', function() {
-  var \$n = jQuery(this).closest('.storelinkformc-dismissable');
-  jQuery.post(ajaxurl, {
-    action: 'storelinkformc_dismiss_checkout_notice',
-    _ajax_nonce: \$n.data('nonce')
-  });
-});
-JS;
+
+    $js  = "jQuery(document).on('click', '.storelinkformc-dismissable .notice-dismiss', function() {\n";
+    $js .= "  var \$n = jQuery(this).closest('.storelinkformc-dismissable');\n";
+    $js .= "  jQuery.post(ajaxurl, {\n";
+    $js .= "    action: 'storelinkformc_dismiss_checkout_notice',\n";
+    $js .= "    _ajax_nonce: \$n.data('nonce')\n";
+    $js .= "  });\n";
+    $js .= "});\n";
+
     wp_add_inline_script('jquery', $js);
 });
 
@@ -230,28 +271,42 @@ function storelinkformc_create_pending_delivery($order_id) {
         // Roles
         if (isset($product_roles[$product_id])) {
             $role = sanitize_text_field($product_roles[$product_id]);
-            if (!user_can($user_id, $role)) $user->add_role($role);
+            if (!user_can($user_id, $role)) {
+                $user->add_role($role);
+            }
         }
 
-        if (!in_array($product_id, $allowed_products)) continue;
+        if (!in_array($product_id, $allowed_products, true)) {
+            continue;
+        }
 
         $product_name = sanitize_text_field(strtolower($item->get_name()));
         $quantity     = (int) $item->get_quantity();
 
-        $exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries WHERE order_id=%d AND player=%s AND item=%s",
-            $order_id, $player_name, $product_name
-        ));
-        if ($exists) continue;
+        $exists = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries WHERE order_id=%d AND player=%s AND item=%s",
+                $order_id,
+                $player_name,
+                $product_name
+            )
+        );
+        if ($exists) {
+            continue;
+        }
 
-        $wpdb->insert("{$wpdb->prefix}pending_deliveries", [
-            'order_id'  => $order_id,
-            'player'    => $player_name,
-            'item'      => $product_name,
-            'amount'    => $quantity,
-            'delivered' => 0,
-            'timestamp' => current_time('mysql')
-        ], ['%d','%s','%s','%d','%d','%s']);
+        $wpdb->insert(
+            "{$wpdb->prefix}pending_deliveries",
+            [
+                'order_id'  => $order_id,
+                'player'    => $player_name,
+                'item'      => $product_name,
+                'amount'    => $quantity,
+                'delivered' => 0,
+                'timestamp' => current_time('mysql'),
+            ],
+            ['%d', '%s', '%s', '%d', '%d', '%s']
+        );
     }
 }
 
@@ -287,7 +342,10 @@ add_filter('woocommerce_email_order_meta_fields', function ($fields, $sent_to_ad
         $player = sanitize_text_field(get_user_meta($order->get_user_id(), 'minecraft_player', true));
     }
     if ($player) {
-        $fields['minecraft_player'] = ['label' => 'Minecraft Username', 'value' => $player];
+        $fields['minecraft_player'] = [
+            'label' => 'Minecraft Username',
+            'value' => $player,
+        ];
     }
     return $fields;
 }, 10, 3);
@@ -326,14 +384,14 @@ function storelinkformc_render_account_sync_page() {
                  style="width:64px;height:64px;border-radius:6px;image-rendering:pixelated;display:block;transition:transform 0.2s ease;">
         </div>
         <div class="storelinkformc-info">
-            <?php if ($player): ?>
+            <?php if ($player) : ?>
                 <p style="margin:0 0 6px;">
                     ✅ Your account is linked to: <strong><?php echo esc_html($player); ?></strong>
                 </p>
                 <button id="storelinkformc-unlink-button" class="storelinkformc-danger-btn" type="button">
                     🔓 Unlink Minecraft Account
                 </button>
-            <?php else: ?>
+            <?php else : ?>
                 <p style="margin:0 0 8px;">
                     ⛔ You don’t have a Minecraft account linked yet.
                 </p>
@@ -379,22 +437,25 @@ function storelinkformc_enqueue_scripts() {
     if (is_singular()) {
         global $post;
         if (has_shortcode($post->post_content, 'storelinkformc_account_sync')) {
-        wp_enqueue_script(
-            'storelinkformc-unlink-js',
-            plugin_dir_url(__FILE__) . 'assets/js/unlink-account.js',
-            array(),
-            filemtime(plugin_dir_path(__FILE__) . 'assets/js/unlink-account.js'),
-            true
-        );
+            wp_enqueue_script(
+                'storelinkformc-unlink-js',
+                plugin_dir_url(__FILE__) . 'assets/js/unlink-account.js',
+                array(),
+                filemtime(plugin_dir_path(__FILE__) . 'assets/js/unlink-account.js'),
+                true
+            );
 
-        wp_localize_script('storelinkformc-unlink-js', 'storelinkformc_vars', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('storelinkformc_unlink_action'),
-        ));
+            wp_localize_script(
+                'storelinkformc-unlink-js',
+                'storelinkformc_vars',
+                array(
+                    'ajax_url' => admin_url('admin-ajax.php'),
+                    'nonce'    => wp_create_nonce('storelinkformc_unlink_action'),
+                )
+            );
+        }
     }
 }
-}
-
 add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_scripts');
 
 add_action('wp_enqueue_scripts', 'storelinkformc_enqueue_checkout_script');
@@ -415,13 +476,15 @@ function storelinkformc_enqueue_checkout_script() {
         $linked_player = sanitize_text_field(get_user_meta(get_current_user_id(), 'minecraft_player', true));
     }
 
-    wp_localize_script('storelinkformc-checkout', 'storelinkformc_checkout_vars', [
-        'linked_player' => $linked_player,
-        'force_link'    => storelinkformc_force_link_enabled() ? 'yes' : 'no',
-    ]);
-
+    wp_localize_script(
+        'storelinkformc-checkout',
+        'storelinkformc_checkout_vars',
+        [
+            'linked_player' => $linked_player,
+            'force_link'    => storelinkformc_force_link_enabled() ? 'yes' : 'no',
+        ]
+    );
 }
-
 
 add_action('wp_ajax_storelinkformc_unlink_account', 'storelinkformc_handle_unlink');
 
@@ -454,14 +517,17 @@ function storelinkformc_thankyou_text($text, $order) {
     // 1) Insert Minecraft username right after "Gracias"/"Thank you" when available (non-gift)
     $player_to_show = $linked ? $linked : '';
     if ($player_to_show) {
-        // Try to inject after "Gracias." or "Thank you."
+        /* translators: %s: Minecraft username linked to the customer account. */
         $pattern = '/^(Gracias|Thank you)\./i';
         if (preg_match($pattern, $text)) {
             $replacement = '$1, ' . esc_html($player_to_show) . '.';
             $text = preg_replace($pattern, $replacement, $text, 1);
         } else {
-            // Fallback: prepend politely if theme string is different
-            $prefix = sprintf(__('Thank you, %s.', 'storelinkformc'), esc_html($player_to_show));
+            /* translators: %s: Minecraft username linked to the customer account. */
+            $prefix = sprintf(
+                __('Thank you, %s.', 'storelinkformc'),
+                esc_html($player_to_show)
+            );
             $text = $prefix . ' ' . $text;
         }
     }
@@ -481,6 +547,7 @@ function storelinkformc_thankyou_text($text, $order) {
 
     if ($has_synced) {
         if ($gift && !empty($recipient)) {
+            /* translators: %s: Minecraft username that will receive the gift on the server. */
             $extra = sprintf(
                 __(' Your item(s) will be delivered on the server to %s as soon as possible.', 'storelinkformc'),
                 esc_html($recipient)
@@ -490,6 +557,5 @@ function storelinkformc_thankyou_text($text, $order) {
         }
         $text .= $extra;
     }
-
     return $text;
 }

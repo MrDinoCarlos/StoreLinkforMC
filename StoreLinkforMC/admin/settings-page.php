@@ -1,5 +1,7 @@
 <?php
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 add_action('admin_menu', 'storelinkformc_add_admin_menu');
 add_action('admin_init', 'storelinkformc_settings_init');
@@ -7,7 +9,7 @@ add_action('admin_init', 'storelinkformc_settings_init');
 function storelinkformc_add_admin_menu() {
     add_menu_page(
         'storelinkformc Settings',
-        'StoreLinkforMC',
+        'storelinkformc',
         'manage_options',
         'storelinkformc',
         'storelinkformc_options_page',
@@ -16,8 +18,8 @@ function storelinkformc_add_admin_menu() {
 
     add_submenu_page(
         'storelinkformc',
-        'Sync Roles',
-        'Sync Roles',
+        __('Sync Roles', 'StoreLinkforMC'),
+        __('Sync Roles', 'StoreLinkforMC'),
         'manage_options',
         'storelinkformc_sync_roles',
         function () {
@@ -25,41 +27,57 @@ function storelinkformc_add_admin_menu() {
             storelinkformc_sync_roles_page();
         }
     );
-
 }
 
 function storelinkformc_settings_init() {
     // === Username policy (Premium-only or Any) ===
-    register_setting('storelinkformc_settings', 'storelinkformc_username_policy', [
-        'type' => 'string',
-        'sanitize_callback' => function($v){ return in_array($v, ['premium','any'], true) ? $v : 'premium'; },
-        'default' => 'premium',
-    ]);
+    register_setting(
+        'storelinkformc_settings',
+        'storelinkformc_username_policy',
+        [
+            'type'              => 'string',
+            'sanitize_callback' => function ($v) {
+                return in_array($v, ['premium', 'any'], true) ? $v : 'premium';
+            },
+            'default'           => 'premium',
+        ]
+    );
+
     // === Force link or not ===
-    register_setting('storelinkformc_settings', 'storelinkformc_force_link', [
-        'type' => 'string',
-        'sanitize_callback' => function($v){ return $v === 'no' ? 'no' : 'yes'; },
-        'default' => 'yes',
-    ]);
+    register_setting(
+        'storelinkformc_settings',
+        'storelinkformc_force_link',
+        [
+            'type'              => 'string',
+            'sanitize_callback' => function ($v) {
+                return $v === 'no' ? 'no' : 'yes';
+            },
+            'default'           => 'yes',
+        ]
+    );
 
     // API Token
-    register_setting('storelinkformc_tokens', 'storelinkformc_api_token', [
-        'type' => 'string',
-        'sanitize_callback' => 'sanitize_text_field',
-        'default' => ''
-    ]);
+    register_setting(
+        'storelinkformc_tokens',
+        'storelinkformc_api_token',
+        [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => '',
+        ]
+    );
 
     // Section: API Token
     add_settings_section(
         'storelinkformc_section_main',
-        'API Token',
+        __('API Token', 'StoreLinkforMC'),
         null,
         'storelinkformc_tokens'
     );
 
     add_settings_field(
         'storelinkformc_api_token',
-        'Token',
+        __('Token', 'StoreLinkforMC'),
         'storelinkformc_api_token_render',
         'storelinkformc_tokens',
         'storelinkformc_section_main'
@@ -68,16 +86,16 @@ function storelinkformc_settings_init() {
     // Section: Username policy
     add_settings_section(
         'storelinkformc_section_usernames',
-        'Minecraft Username Policy',
+        __('Minecraft Username Policy', 'StoreLinkforMC'),
         function () {
-            echo '<p>Choose whether to allow only Mojang (premium) usernames, or any username (non-premium mode).</p>';
+            echo '<p>' . esc_html__('Choose whether to allow only Mojang (premium) usernames, or any username (non-premium mode).', 'StoreLinkforMC') . '</p>';
         },
         'storelinkformc_settings'
     );
 
     add_settings_field(
         'storelinkformc_force_link',
-        'Force Minecraft account linking',
+        __('Force Minecraft account linking', 'StoreLinkforMC'),
         function () {
             $val = get_option('storelinkformc_force_link', 'yes');
             ?>
@@ -85,10 +103,10 @@ function storelinkformc_settings_init() {
             <input type="hidden" name="storelinkformc_force_link" value="no" />
             <label>
                 <input type="checkbox" name="storelinkformc_force_link" value="yes" <?php checked($val, 'yes'); ?> />
-                Require a linked account or use the “Gift” option (default).
+                <?php esc_html_e('Require a linked account or use the “Gift” option (default).', 'StoreLinkforMC'); ?>
             </label>
             <p class="description">
-                If unchecked, checkout will ask directly for a Minecraft username (still validated against the Premium/Any policy).
+                <?php esc_html_e('If unchecked, checkout will ask directly for a Minecraft username (still validated against the Premium/Any policy).', 'StoreLinkforMC'); ?>
             </p>
             <?php
         },
@@ -96,16 +114,13 @@ function storelinkformc_settings_init() {
         'storelinkformc_section_usernames'
     );
 
-
-
     add_settings_field(
         'storelinkformc_username_policy',
-        'Allowed usernames',
+        __('Allowed usernames', 'StoreLinkforMC'),
         'storelinkformc_username_policy_render',
         'storelinkformc_settings',
         'storelinkformc_section_usernames'
     );
-
 }
 
 function storelinkformc_api_token_render() {
@@ -117,20 +132,20 @@ function storelinkformc_api_token_render() {
     }
 
     echo '<input type="text" id="api-token-field" class="regular-text" readonly value="' . esc_attr($token) . '" style="cursor:pointer;">';
-    echo '<p class="description">Click to copy the token. Use this token in your Minecraft plugin config.</p>';
+    echo '<p class="description">' . esc_html__('Click to copy the token. Use this token in your Minecraft plugin config.', 'StoreLinkforMC') . '</p>';
 
     // Formulario: Regenerate Token (admin-post)
-    echo '<form method="post" action="' . esc_url( admin_url('admin-post.php') ) . '" style="margin-top:12px; display:inline-block;">';
+    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin-top:12px; display:inline-block;">';
     wp_nonce_field('storelinkformc_token_action', 'storelinkformc_token_nonce');
     echo '<input type="hidden" name="action" value="storelinkformc_regen_token">';
-    echo '<button type="submit" class="button">🔁 Regenerate Token</button>';
+    echo '<button type="submit" class="button">🔁 ' . esc_html__('Regenerate Token', 'StoreLinkforMC') . '</button>';
     echo '</form> ';
 
     // Formulario: Rebuild Table (admin-post)
-    echo '<form method="post" action="' . esc_url( admin_url('admin-post.php') ) . '" style="margin-top:12px; display:inline-block; margin-left:8px;">';
+    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin-top:12px; display:inline-block; margin-left:8px;">';
     wp_nonce_field('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce');
     echo '<input type="hidden" name="action" value="storelinkformc_rebuild_pending">';
-    echo '<button type="submit" class="button button-secondary">♻️ Rebuild Table</button>';
+    echo '<button type="submit" class="button button-secondary">♻️ ' . esc_html__('Rebuild Table', 'StoreLinkforMC') . '</button>';
     echo '</form>';
 }
 
@@ -139,18 +154,18 @@ function storelinkformc_options_page() { ?>
         <?php
         // Avisos SOLO en esta página
         if (isset($_GET['storelink_notice'])) {
-            $msg = sanitize_text_field($_GET['storelink_notice']);
+            $msg = sanitize_text_field(wp_unslash($_GET['storelink_notice']));
             if ($msg === 'table_ok') {
-                echo '<div class="updated notice"><p>✅ Tables created/updated successfully.</p></div>';
+                echo '<div class="updated notice"><p>✅ ' . esc_html__('Tables created/updated successfully.', 'StoreLinkforMC') . '</p></div>';
             } elseif ($msg === 'checkout_ok') {
-                echo '<div class="updated notice"><p>✅ Checkout replaced by classic shortcode.</p></div>';
+                echo '<div class="updated notice"><p>✅ ' . esc_html__('Checkout replaced by classic shortcode.', 'StoreLinkforMC') . '</p></div>';
             } elseif ($msg === 'token_ok') {
-                echo '<div class="updated notice"><p>✅ Regenerated token.</p></div>';
+                echo '<div class="updated notice"><p>✅ ' . esc_html__('Regenerated token.', 'StoreLinkforMC') . '</p></div>';
             }
         }
         ?>
 
-        <h1>storelinkformc Settings</h1>
+        <h1><?php esc_html_e('StoreLinkforMC Settings', 'StoreLinkforMC'); ?></h1>
 
         <?php
         // 1) Caja de TOKEN, fuera del form principal (tiene sus propios forms admin-post)
@@ -159,34 +174,44 @@ function storelinkformc_options_page() { ?>
 
         <hr/>
 
-        <h2><?php esc_html_e('Options', 'storelinkformc'); ?></h2>
+        <h2><?php esc_html_e('Options', 'StoreLinkforMC'); ?></h2>
         <form method="post" action="options.php">
             <?php
             // 2) Form principal SOLO para opciones (policy, etc.)
             settings_fields('storelinkformc_settings');
             do_settings_sections('storelinkformc_settings');
-            submit_button(__('Save Settings', 'storelinkformc'));
+            submit_button(__('Save Settings', 'StoreLinkforMC'));
             ?>
         </form>
 
-        <h2>Maintenance</h2>
+        <h2><?php esc_html_e('Maintenance', 'StoreLinkforMC'); ?></h2>
 
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <?php wp_nonce_field('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce'); ?>
             <input type="hidden" name="action" value="storelinkformc_rebuild_pending">
             <p>
-                <button type="submit" class="button button-primary">🛠️ Create/Fix tables (DB)</button>
+                <button type="submit" class="button button-primary">🛠️ <?php esc_html_e('Create/Fix tables (DB)', 'StoreLinkforMC'); ?></button>
             </p>
-            <p class="description">Run dbDelta to (re)create the pending deliveries table.</p>
+            <p class="description">
+                <?php esc_html_e('Run dbDelta to (re)create the pending deliveries table.', 'StoreLinkforMC'); ?>
+            </p>
         </form>
 
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <?php wp_nonce_field('storelinkformc_force_checkout_action', 'storelinkformc_force_checkout_nonce'); ?>
             <input type="hidden" name="action" value="storelinkformc_force_checkout_shortcode">
             <p>
-                <button type="submit" class="button">🔁 Force Classic Checkout (shortcode)</button>
+                <button type="submit" class="button">🔁 <?php esc_html_e('Force Classic Checkout (shortcode)', 'StoreLinkforMC'); ?></button>
             </p>
-            <p class="description">Replaces the content of the Checkout page with <code>[woocommerce_checkout]</code>.</p>
+            <p class="description">
+                <?php
+                printf(
+                    /* translators: %s is the WooCommerce checkout shortcode. */
+                    esc_html__('Replaces the content of the Checkout page with %s.', 'StoreLinkforMC'),
+                    '<code>[woocommerce_checkout]</code>'
+                );
+                ?>
+            </p>
         </form>
 
     </div>
@@ -194,7 +219,9 @@ function storelinkformc_options_page() { ?>
 
 add_action('admin_enqueue_scripts', 'storelinkformc_enqueue_admin_scripts');
 function storelinkformc_enqueue_admin_scripts($hook) {
-    if ($hook !== 'toplevel_page_storelinkformc') return;
+    if ($hook !== 'toplevel_page_storelinkformc') {
+        return;
+    }
 
     // desde /admin/ apuntamos a ../assets/js/admin.js
     wp_register_script(
@@ -217,52 +244,74 @@ add_filter('script_loader_tag', function ($tag, $handle, $src) {
 function storelinkformc_username_policy_render() {
     $v = get_option('storelinkformc_username_policy', 'premium');
     ?>
-    <label><input type="radio" name="storelinkformc_username_policy" value="premium" <?php checked($v, 'premium'); ?>> Premium only (validate via Mojang)</label><br>
-    <label><input type="radio" name="storelinkformc_username_policy" value="any" <?php checked($v, 'any'); ?>> Any username (non-premium)</label>
+    <label>
+        <input type="radio" name="storelinkformc_username_policy" value="premium" <?php checked($v, 'premium'); ?> />
+        <?php esc_html_e('Premium only (validate via Mojang)', 'StoreLinkforMC'); ?>
+    </label><br>
+    <label>
+        <input type="radio" name="storelinkformc_username_policy" value="any" <?php checked($v, 'any'); ?> />
+        <?php esc_html_e('Any username (non-premium)', 'StoreLinkforMC'); ?>
+    </label>
     <?php
 }
 
 // Admin-post: regenerate token
 add_action('admin_post_storelinkformc_regen_token', function () {
-    if (!current_user_can('manage_options')) wp_die('Forbidden');
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('Forbidden', 'StoreLinkforMC'));
+    }
     check_admin_referer('storelinkformc_token_action', 'storelinkformc_token_nonce');
 
     update_option('storelinkformc_api_token', wp_generate_password(32, false));
 
-    wp_safe_redirect( add_query_arg(
-        'storelink_notice',
-        'token_ok',
-        admin_url('admin.php?page=storelinkformc')
-    ) );
+    wp_safe_redirect(
+        add_query_arg(
+            'storelink_notice',
+            'token_ok',
+            admin_url('admin.php?page=storelinkformc')
+        )
+    );
     exit;
 });
 
 // Admin-post: (re)crear tabla pending_deliveries (usa función central del plugin)
 add_action('admin_post_storelinkformc_rebuild_pending', function () {
-    if (!current_user_can('manage_options')) wp_die('Forbidden');
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('Forbidden', 'StoreLinkforMC'));
+    }
     check_admin_referer('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce');
 
     if (function_exists('storelinkformc_create_or_update_tables')) {
         storelinkformc_create_or_update_tables();
     }
 
-    wp_safe_redirect( add_query_arg(
-        'storelink_notice', 'table_ok', admin_url('admin.php?page=storelinkformc')
-    ) );
+    wp_safe_redirect(
+        add_query_arg(
+            'storelink_notice',
+            'table_ok',
+            admin_url('admin.php?page=storelinkformc')
+        )
+    );
     exit;
 });
 
 // Admin-post: forzar checkout clásico
 add_action('admin_post_storelinkformc_force_checkout_shortcode', function () {
-    if (!current_user_can('manage_options')) wp_die('Forbidden');
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('Forbidden', 'StoreLinkforMC'));
+    }
     check_admin_referer('storelinkformc_force_checkout_action', 'storelinkformc_force_checkout_nonce');
 
     if (function_exists('storelinkformc_force_classic_checkout')) {
         storelinkformc_force_classic_checkout(true);
     }
 
-    wp_safe_redirect( add_query_arg(
-        'storelink_notice', 'checkout_ok', admin_url('admin.php?page=storelinkformc')
-    ) );
+    wp_safe_redirect(
+        add_query_arg(
+            'storelink_notice',
+            'checkout_ok',
+            admin_url('admin.php?page=storelinkformc')
+        )
+    );
     exit;
 });

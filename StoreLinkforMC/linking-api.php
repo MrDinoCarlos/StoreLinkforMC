@@ -1,24 +1,38 @@
 <?php
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 // 📡 Endpoints REST API
 add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/request-link', [
-        'methods' => 'POST',
+        'methods'  => 'POST',
         'callback' => function ($request) {
             $email  = sanitize_email($request->get_param('email'));
             $player = sanitize_user($request->get_param('player'));
 
-            // Rate limiting per IP
-            $real_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-            $ip_key  = 'storelinkformc_rate_' . md5($real_ip);
+            // Rate limiting per IP (sanitized)
+            $real_ip = '0.0.0.0';
+            $ip_sources = [
+                'HTTP_CF_CONNECTING_IP',
+                'HTTP_X_REAL_IP',
+                'REMOTE_ADDR',
+            ];
+            foreach ($ip_sources as $key) {
+                if (!empty($_SERVER[$key])) {
+                    $real_ip = sanitize_text_field(wp_unslash($_SERVER[$key]));
+                    break;
+                }
+            }
+
+            $ip_key = 'storelinkformc_rate_' . md5($real_ip);
             if (get_transient($ip_key)) {
                 return new WP_REST_Response(['error' => 'Please wait before requesting another code.'], 429);
             }
             set_transient($ip_key, true, 60); // 1 request/minute
 
             // Token verification
-            $token = sanitize_text_field($request->get_param('token'));
+            $token        = sanitize_text_field($request->get_param('token'));
             $stored_token = get_option('storelinkformc_api_token');
             if ($token !== $stored_token) {
                 return new WP_REST_Response(['error' => 'Invalid token'], 403);
@@ -26,20 +40,20 @@ add_action('rest_api_init', function () {
 
             return storelinkformc_request_link($request);
         },
-        'permission_callback' => '__return_true' // Handled inside callback
+        'permission_callback' => '__return_true', // Handled inside callback
     ]);
 
     register_rest_route('storelinkformc/v1', '/verify-link', [
-        'methods' => 'POST',
+        'methods'  => 'POST',
         'callback' => function ($request) {
-            $token = sanitize_text_field($request->get_param('token'));
+            $token        = sanitize_text_field($request->get_param('token'));
             $stored_token = get_option('storelinkformc_api_token');
             if ($token !== $stored_token) {
                 return new WP_REST_Response(['error' => 'Invalid token'], 403);
             }
             return storelinkformc_verify_link($request);
         },
-        'permission_callback' => '__return_true'
+        'permission_callback' => '__return_true',
     ]);
 });
 
@@ -68,7 +82,7 @@ function storelinkformc_request_link($request) {
     // === Require that the email belongs to an existing WP user ===
     $user = get_user_by('email', $email);
     if (!$user) {
-        error_log('[SLMC] request-link: user not found for email='.$email.' player='.$player.' ip='.$_SERVER['REMOTE_ADDR']);
+        // No logging here to satisfy WP.org sniff; Minecraft will show the error message.
         return new WP_REST_Response(['error' => 'User not found. Please register on the site before linking.'], 404);
     }
 
@@ -78,7 +92,10 @@ function storelinkformc_request_link($request) {
     }
 
     // Prevenir que se use un nombre ya vinculado
-    $users = get_users(['meta_key' => 'minecraft_player', 'meta_value' => $player]);
+    $users = get_users([
+        'meta_key'   => 'minecraft_player',
+        'meta_value' => $player,
+    ]);
     if (!empty($users)) {
         return new WP_REST_Response(['error' => 'This player name is already linked.'], 409);
     }
@@ -86,14 +103,18 @@ function storelinkformc_request_link($request) {
     $code = wp_rand(100000, 999999);
     $key  = 'storelinkformc_verify_code_' . md5($email);
 
-    set_transient($key, [
-        'code'    => (string)$code,
-        'player'  => $player,
-        'user_id' => $user->ID,
-    ], HOUR_IN_SECONDS);
+    set_transient(
+        $key,
+        [
+            'code'    => (string) $code,
+            'player'  => $player,
+            'user_id' => $user->ID,
+        ],
+        HOUR_IN_SECONDS
+    );
 
-    $link_url = slmc_build_link_url($email, (string)$code);
-    $ok = slmc_send_linking_email($email, (string)$code, $link_url, $player);
+    $link_url = slmc_build_link_url($email, (string) $code);
+    $ok       = slmc_send_linking_email($email, (string) $code, $link_url, $player);
 
     if (!$ok) {
         // Devuelve error real al cliente (Minecraft lo mostrará en el chat)
@@ -101,7 +122,6 @@ function storelinkformc_request_link($request) {
     }
 
     return new WP_REST_Response(['success' => true, 'message' => 'Verification code sent.'], 200);
-
 }
 
 // ✅ Verificar código y vincular cuenta
@@ -111,7 +131,7 @@ function storelinkformc_verify_link($request) {
     $key   = 'storelinkformc_verify_code_' . md5($email);
 
     $data = get_transient($key);
-    if (!$data || empty($data['code']) || (string)$data['code'] !== $code) {
+    if (!$data || empty($data['code']) || (string) $data['code'] !== $code) {
         return new WP_REST_Response(['error' => 'Invalid or expired code.'], 400);
     }
 
@@ -170,19 +190,18 @@ function storelinkformc_unlink_account($user_id) {
 
 add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/pending', [
-        'methods' => 'GET',
+        'methods'  => 'GET',
         'callback' => 'storelinkformc_api_get_pending',
         'permission_callback' => function ($request) {
-            $token = sanitize_text_field($request->get_param('token'));
+            $token        = sanitize_text_field($request->get_param('token'));
             $stored_token = get_option('storelinkformc_api_token');
             return $token === $stored_token;
-        }
-
+        },
     ]);
 });
 
 function storelinkformc_api_get_pending($request) {
-    $token = sanitize_text_field($request->get_param('token'));
+    $token  = sanitize_text_field($request->get_param('token'));
     $player = sanitize_text_field($request->get_param('player'));
 
     $stored_token = get_option('storelinkformc_api_token');
@@ -197,36 +216,38 @@ function storelinkformc_api_get_pending($request) {
     global $wpdb;
     $table = $wpdb->prefix . 'pending_deliveries';
 
-    $rows = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, item, amount FROM $table WHERE player = %s AND delivered = 0",
-        $player
-    ));
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT id, item, amount FROM $table WHERE player = %s AND delivered = 0",
+            $player
+        )
+    );
 
     return ['success' => true, 'deliveries' => $rows];
 }
+
 add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/mark-delivered', [
-        'methods' => 'POST',
+        'methods'  => 'POST',
         'callback' => 'storelinkformc_api_mark_delivered',
         'permission_callback' => function ($request) {
-            $token = sanitize_text_field($request->get_param('token'));
+            $token        = sanitize_text_field($request->get_param('token'));
             $stored_token = get_option('storelinkformc_api_token');
             return $token === $stored_token;
-        }
-
+        },
     ]);
 });
 
 function storelinkformc_api_mark_delivered($request) {
     $token = $request->get_param('token');
-    $id = $request->get_param('id');
+    $id    = $request->get_param('id');
 
     if (empty($token) || empty($id)) {
         return new WP_REST_Response(['error' => 'Missing delivery ID or token'], 400);
     }
 
-    $token = sanitize_text_field($token);
-    $id = intval($id);
+    $token        = sanitize_text_field($token);
+    $id           = (int) $id;
     $stored_token = get_option('storelinkformc_api_token');
 
     if (!$stored_token || $token !== $stored_token) {
@@ -262,32 +283,39 @@ function storelinkformc_mojang_check_username($nick) {
     }
 
     $cache_key = 'mojang_profile_' . strtolower($nick);
-    $cached = get_transient($cache_key);
+    $cached    = get_transient($cache_key);
     if ($cached !== false) {
-        if ($cached === 'NF') return ['ok'=>false,'reason'=>'NF'];
-        if (is_array($cached) && !empty($cached['uuid'])) return ['ok'=>true,'uuid'=>$cached['uuid']];
+        if ($cached === 'NF') {
+            return ['ok' => false, 'reason' => 'NF'];
+        }
+        if (is_array($cached) && !empty($cached['uuid'])) {
+            return ['ok' => true, 'uuid' => $cached['uuid']];
+        }
     }
 
-    $resp = wp_remote_get('https://api.mojang.com/users/profiles/minecraft/' . rawurlencode($nick), [
-        'timeout' => 8,
-        'headers' => ['Accept' => 'application/json'],
-    ]);
+    $resp = wp_remote_get(
+        'https://api.mojang.com/users/profiles/minecraft/' . rawurlencode($nick),
+        [
+            'timeout' => 8,
+            'headers' => ['Accept' => 'application/json'],
+        ]
+    );
     $code = wp_remote_retrieve_response_code($resp);
 
     if ($code === 200) {
         $body = json_decode(wp_remote_retrieve_body($resp), true);
         $uuid = isset($body['id']) ? preg_replace('/[^a-f0-9]/i', '', $body['id']) : '';
         if ($uuid) {
-            set_transient($cache_key, ['uuid'=>$uuid], DAY_IN_SECONDS);
-            return ['ok'=>true,'uuid'=>$uuid];
+            set_transient($cache_key, ['uuid' => $uuid], DAY_IN_SECONDS);
+            return ['ok' => true, 'uuid' => $uuid];
         }
-        return ['ok'=>false,'reason'=>'NF'];
+        return ['ok' => false, 'reason' => 'NF'];
     } elseif ($code === 204 || $code === 404) {
         set_transient($cache_key, 'NF', HOUR_IN_SECONDS);
-        return ['ok'=>false,'reason'=>'NF'];
+        return ['ok' => false, 'reason' => 'NF'];
     }
 
-    return ['ok'=>false,'reason'=>'ERR']; // network / rate-limit / service down
+    return ['ok' => false, 'reason' => 'ERR']; // network / rate-limit / service down
 }
 
 // ========================
@@ -300,14 +328,19 @@ if (!function_exists('slmc_build_link_url')) {
      */
     function slmc_build_link_url(string $email, string $code): string {
         return add_query_arg(
-            ['slmc-verify' => rawurlencode($code), 'slmc-email' => rawurlencode($email)],
+            [
+                'slmc-verify' => rawurlencode($code),
+                'slmc-email'  => rawurlencode($email),
+            ],
             home_url('/')
         );
     }
 }
 
 if (!function_exists('slmc_mail_content_type_html')) {
-    function slmc_mail_content_type_html(){ return 'text/html'; }
+    function slmc_mail_content_type_html() {
+        return 'text/html';
+    }
 }
 
 if (!function_exists('slmc_send_linking_email')) {
@@ -320,10 +353,11 @@ if (!function_exists('slmc_send_linking_email')) {
         $site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
 
         $subject_tpl = get_option('slmc_tpl_link_subject', 'Link your Minecraft account on {site_name}');
-        $body_tpl    = get_option('slmc_tpl_link_html',
-            '<p>Hello {player},</p>'.
-            '<p>Use this code: <strong>{verify_code}</strong> to link your account.</p>'.
-            '<p><a href="{link_url}">{link_url}</a></p>'.
+        $body_tpl    = get_option(
+            'slmc_tpl_link_html',
+            '<p>Hello {player},</p>' .
+            '<p>Use this code: <strong>{verify_code}</strong> to link your account.</p>' .
+            '<p><a href="{link_url}">{link_url}</a></p>' .
             '<p>— {site_name}</p>'
         );
 
@@ -343,7 +377,6 @@ if (!function_exists('slmc_send_linking_email')) {
         $ok = wp_mail($user_email, $subject, $body);
         remove_filter('wp_mail_content_type', 'slmc_mail_content_type_html');
 
-        error_log('[SLMC] wp_mail to '.$user_email.' subject="'. $subject .'" result='.var_export($ok,true));
         return (bool) $ok;
     }
 }

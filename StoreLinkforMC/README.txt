@@ -1,11 +1,11 @@
 === StoreLink for Minecraft by MrDino ===
 Contributors: mrdinocarlos
 Donate link: https://buymeacoffee.com/mrdino
-Tags: minecraft, woocommerce, delivery, virtual-items, integration, game, shop
+Tags: minecraft, woocommerce, delivery, game, shop
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.0.30
+Stable tag: 1.0.31
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,17 +63,25 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.30 =
+= Version 1.0.31 =
 
-- Added player head preview to the "Minecraft Account Link" page. Displays the linked player’s head or a question mark if not linked.
-- Added redesigned "Unlink Minecraft Account" button with warning styling to better indicate the action.
-- Added help box on the account link screen explaining how to link accounts via in-game command.
-- Added Minecraft head preview in WooCommerce checkout. Shows the linked player’s head by default.
-- Added dynamic head preview for gift orders. When “This is a gift” is checked, the head updates live based on the entered recipient username.
-- Added support for username policy (Premium / Any) in the checkout preview so only valid premium usernames show the correct head when premium-only is enabled.
-- Improved sanitization and cache-busting for skin previews to ensure the correct head is always shown.
-- Fixed account-linking email delivery to go through the configured SMTP settings from the plugin, reducing cases where WordPress/host blocks or drops the mail.
-- Fixed account-linking flow to use the custom email template + SMTP combo so players actually receive the link code.
+Added conditional Minecraft checkout: Minecraft Username + Gift fields now appear only when the cart contains synced products; all other orders use the normal WooCommerce checkout.
+Added full sanitization and escaping workflow across all admin pages to comply with WordPress Plugin Review requirements.
+Added safety checks and sanitization for Cloudflare CDN & Cache settings, including improved API error handling.
+Added improved handling of REST API parameters in the account-linking and delivery-sync endpoints.
+Added more consistent admin UI elements and styling improvements.
+Fixed all text-domain mismatches across the plugin for full localization compatibility.
+Fixed missing translator comments for strings with placeholders.
+Fixed unescaped output warnings in admin notices, Cloudflare settings, and Deliveries pages.
+Fixed multiple nonce verification warnings for admin pages and REST/API handlers.
+Fixed unsafe direct database queries by adding $wpdb->prepare(), sanitization, and escaping where required.
+Fixed Deliveries manager logic: sanitized inputs, improved update/mark/unmark actions, and corrected order-completion automation.
+Fixed SMTP warning notice to sanitize all GET parameters and avoid false positives in Plugin Check.
+Fixed several slow or unsafe meta queries by improving parameter handling.
+Fixed inconsistent checkout field behavior when gifting is enabled but the player is not logged in.
+Removed unsafe fallback cache-bypass constants and replaced them with prefixed, compliant versions.
+Removed outdated or redundant sanitization patterns that caused Plugin Check warnings.
+Removed unused admin code blocks left over from earlier versions.
 
 
 == License ==
