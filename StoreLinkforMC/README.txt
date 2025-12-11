@@ -3,9 +3,9 @@ Contributors: mrdinocarlos
 Donate link: https://buymeacoffee.com/mrdino
 Tags: minecraft, woocommerce, delivery, game, shop
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.0.31
+Stable tag: 1.0.32
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,25 +63,9 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.31 =
+= Version 1.0.32 =
 
-Added conditional Minecraft checkout: Minecraft Username + Gift fields now appear only when the cart contains synced products; all other orders use the normal WooCommerce checkout.
-Added full sanitization and escaping workflow across all admin pages to comply with WordPress Plugin Review requirements.
-Added safety checks and sanitization for Cloudflare CDN & Cache settings, including improved API error handling.
-Added improved handling of REST API parameters in the account-linking and delivery-sync endpoints.
-Added more consistent admin UI elements and styling improvements.
-Fixed all text-domain mismatches across the plugin for full localization compatibility.
-Fixed missing translator comments for strings with placeholders.
-Fixed unescaped output warnings in admin notices, Cloudflare settings, and Deliveries pages.
-Fixed multiple nonce verification warnings for admin pages and REST/API handlers.
-Fixed unsafe direct database queries by adding $wpdb->prepare(), sanitization, and escaping where required.
-Fixed Deliveries manager logic: sanitized inputs, improved update/mark/unmark actions, and corrected order-completion automation.
-Fixed SMTP warning notice to sanitize all GET parameters and avoid false positives in Plugin Check.
-Fixed several slow or unsafe meta queries by improving parameter handling.
-Fixed inconsistent checkout field behavior when gifting is enabled but the player is not logged in.
-Removed unsafe fallback cache-bypass constants and replaced them with prefixed, compliant versions.
-Removed outdated or redundant sanitization patterns that caused Plugin Check warnings.
-Removed unused admin code blocks left over from earlier versions.
+Tested for WordPress Version 6.9
 
 
 == License ==
