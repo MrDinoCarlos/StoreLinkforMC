@@ -19,11 +19,11 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
     // Campo de username siempre presente
     $fields['billing']['minecraft_username'] = [
         'type'              => 'text',
-        'label'             => __('Minecraft Username', 'StoreLinkforMC'),
+        'label'             => __('Minecraft Username', 'storelinkformc'),
         'required'          => $force ? false : true, // si NO se fuerza vincular, este campo es obligatorio
         'class'             => ['form-row-wide'],
         'priority'          => 210,
-        'placeholder'       => __('e.g. Notch', 'StoreLinkforMC'),
+        'placeholder'       => __('e.g. Notch', 'storelinkformc'),
         'custom_attributes' => [],
     ];
 
@@ -31,7 +31,7 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
         // MODO CLÁSICO: mostrar checkbox de regalo
         $fields['billing']['minecraft_gift'] = [
             'type'     => 'checkbox',
-            'label'    => __('This is a gift', 'StoreLinkforMC'),
+            'label'    => __('This is a gift', 'storelinkformc'),
             'required' => false,
             'class'    => ['form-row-wide'],
             'priority' => 209,
@@ -71,7 +71,10 @@ add_action('woocommerce_checkout_process', function () {
 
     $user_id = get_current_user_id();
     $linked  = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
-    $is_gift = !empty($_POST['minecraft_gift']);
+    // WooCommerce checkout submission; WooCommerce owns nonce validation here.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $is_gift = isset($_POST['minecraft_gift']) && '' !== sanitize_text_field(wp_unslash($_POST['minecraft_gift']));
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $mc_user = isset($_POST['minecraft_username']) ? sanitize_text_field(wp_unslash($_POST['minecraft_username'])) : '';
     $force   = function_exists('storelinkformc_force_link_enabled') ? storelinkformc_force_link_enabled() : true;
 
@@ -82,34 +85,34 @@ add_action('woocommerce_checkout_process', function () {
         // MODO CLÁSICO (como ahora)
         if ($is_gift) {
             if ($mc_user === '') {
-                wc_add_notice(__('Please enter the recipient\'s Minecraft username (gift).', 'StoreLinkforMC'), 'error');
+                wc_add_notice(__('Please enter the recipient\'s Minecraft username (gift).', 'storelinkformc'), 'error');
                 return;
             }
             // Verificar usuario si procede
             if (!storelinkformc_checkout_verify_username($mc_user, $policy)) {
-                wc_add_notice(__('Invalid or not allowed Minecraft username for this server policy.', 'StoreLinkforMC'), 'error');
+                wc_add_notice(__('Invalid or not allowed Minecraft username for this server policy.', 'storelinkformc'), 'error');
             }
         } else {
             if ($linked) {
                 // Si se intenta cambiar el vinculado, error (lo gestiona también el JS)
                 if ($mc_user && $mc_user !== $linked) {
-                    wc_add_notice(__('You cannot change your linked Minecraft username unless you mark this order as a gift.', 'StoreLinkforMC'), 'error');
+                    wc_add_notice(__('You cannot change your linked Minecraft username unless you mark this order as a gift.', 'storelinkformc'), 'error');
                 }
             } else {
                 // Sin vinculado y sin gift => no permitido
                 if (!empty($mc_user)) {
-                    wc_add_notice(__('You must link your Minecraft account or mark this order as a gift to enter a username.', 'StoreLinkforMC'), 'error');
+                    wc_add_notice(__('You must link your Minecraft account or mark this order as a gift to enter a username.', 'storelinkformc'), 'error');
                 }
             }
         }
     } else {
         // MODO LIBRE: username obligatorio y verificado
         if ($mc_user === '') {
-            wc_add_notice(__('Please enter a Minecraft username.', 'StoreLinkforMC'), 'error');
+            wc_add_notice(__('Please enter a Minecraft username.', 'storelinkformc'), 'error');
             return;
         }
         if (!storelinkformc_checkout_verify_username($mc_user, $policy)) {
-            wc_add_notice(__('Invalid or not allowed Minecraft username for this server policy.', 'StoreLinkforMC'), 'error');
+            wc_add_notice(__('Invalid or not allowed Minecraft username for this server policy.', 'storelinkformc'), 'error');
         }
     }
 });
@@ -126,7 +129,10 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
 
     $user_id = get_current_user_id();
     $linked  = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
-    $is_gift = !empty($_POST['minecraft_gift']);
+    // WooCommerce checkout submission; WooCommerce owns nonce validation here.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $is_gift = isset($_POST['minecraft_gift']) && '' !== sanitize_text_field(wp_unslash($_POST['minecraft_gift']));
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $mc_user = isset($_POST['minecraft_username']) ? sanitize_text_field(wp_unslash($_POST['minecraft_username'])) : '';
     $force   = function_exists('storelinkformc_force_link_enabled') ? storelinkformc_force_link_enabled() : true;
 

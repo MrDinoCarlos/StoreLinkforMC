@@ -52,12 +52,13 @@ add_action(
 			return;
 		}
 
+		// Dismissal is nonce-protected below.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		if ( isset( $_GET['slmc_dismiss_smtp'], $_GET['_wpnonce'] ) ) {
-			$dismiss_raw = wp_unslash( $_GET['slmc_dismiss_smtp'] );
-			$nonce_raw   = wp_unslash( $_GET['_wpnonce'] );
-
-			$dismiss = sanitize_text_field( $dismiss_raw );
-			$nonce   = sanitize_text_field( $nonce_raw );
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$dismiss = sanitize_text_field( wp_unslash( $_GET['slmc_dismiss_smtp'] ) );
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$nonce   = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) );
 
 			if ( '1' === $dismiss && wp_verify_nonce( $nonce, 'slmc_dismiss_smtp' ) ) {
 				update_user_meta( get_current_user_id(), 'slmc_dismiss_smtp_notice', 1 );
@@ -88,7 +89,10 @@ add_action(
 			return;
 		}
 
-		$on_plugin_page = ( isset( $_GET['page'] ) && SLMC_SETTINGS_PAGE_SLUG === $_GET['page'] );
+		// Read-only admin page detection.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$page           = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$on_plugin_page = ( SLMC_SETTINGS_PAGE_SLUG === $page );
 		if ( ! $on_plugin_page ) {
 			return;
 		}

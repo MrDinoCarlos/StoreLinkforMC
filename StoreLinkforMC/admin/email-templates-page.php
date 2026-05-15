@@ -13,8 +13,8 @@ if (!defined('ABSPATH')) {
 add_action('admin_menu', function () {
     add_submenu_page(
         'storelinkformc',
-        __('Email Templates', 'StoreLinkforMC'),
-        __('Email Templates', 'StoreLinkforMC'),
+        __('Email Templates', 'storelinkformc'),
+        __('Email Templates', 'storelinkformc'),
         'manage_options',
         'storelinkformc_email_templates',
         'storelinkformc_email_templates_page'
@@ -59,8 +59,7 @@ function storelinkformc_email_templates_page() {
 
     // Save
     if (isset($_POST['slmc_email_tpl_save']) && check_admin_referer('slmc_email_tpl_nonce')) {
-        $subject_raw = isset($_POST['slmc_tpl_link_subject']) ? wp_unslash($_POST['slmc_tpl_link_subject']) : '';
-        $subject     = sanitize_text_field($subject_raw);
+        $subject = isset($_POST['slmc_tpl_link_subject']) ? sanitize_text_field(wp_unslash($_POST['slmc_tpl_link_subject'])) : '';
 
         // Allow safe email HTML incl. <img>, tables, inline styles
         $allowed = wp_kses_allowed_html('post');
@@ -74,20 +73,20 @@ function storelinkformc_email_templates_page() {
         $allowed['img']['width']         = true;
         $allowed['img']['height']        = true;
 
-        $html_raw = isset($_POST['slmc_tpl_link_html']) ? wp_unslash($_POST['slmc_tpl_link_html']) : '';
-        $html     = wp_kses($html_raw, $allowed);
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        $html = isset($_POST['slmc_tpl_link_html']) ? wp_kses(wp_unslash($_POST['slmc_tpl_link_html']), $allowed) : '';
 
         update_option('slmc_tpl_link_subject', $subject ?: $default_subject);
         update_option('slmc_tpl_link_html', $html ?: $default_body);
 
-        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__('Templates saved.', 'StoreLinkforMC') . '</p></div>';
+        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__('Templates saved.', 'storelinkformc') . '</p></div>';
     }
 
     // Reset
     if (isset($_POST['slmc_email_tpl_reset']) && check_admin_referer('slmc_email_tpl_nonce')) {
         update_option('slmc_tpl_link_subject', $default_subject);
         update_option('slmc_tpl_link_html', $default_body);
-        echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__('Templates reset to defaults.', 'StoreLinkforMC') . '</p></div>';
+        echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__('Templates reset to defaults.', 'storelinkformc') . '</p></div>';
     }
 
     $subject = get_option('slmc_tpl_link_subject', $default_subject);
@@ -95,16 +94,16 @@ function storelinkformc_email_templates_page() {
 
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('Email Templates', 'StoreLinkforMC'); ?></h1>
-        <p><?php esc_html_e('Customize the email sent when a player requests a verification code.', 'StoreLinkforMC'); ?></p>
+        <h1><?php esc_html_e('Email Templates', 'storelinkformc'); ?></h1>
+        <p><?php esc_html_e('Customize the email sent when a player requests a verification code.', 'storelinkformc'); ?></p>
 
-        <p><strong><?php esc_html_e('Available placeholders:', 'StoreLinkforMC'); ?></strong></p>
+        <p><strong><?php esc_html_e('Available placeholders:', 'storelinkformc'); ?></strong></p>
         <ul style="list-style: disc; padding-left: 20px;">
-            <li><code>{site_name}</code> – <?php esc_html_e('Your site name', 'StoreLinkforMC'); ?></li>
-            <li><code>{user_email}</code> – <?php esc_html_e('Recipient email', 'StoreLinkforMC'); ?></li>
-            <li><code>{verify_code}</code> – <?php esc_html_e('6-digit code', 'StoreLinkforMC'); ?></li>
-            <li><code>{link_url}</code> – <?php esc_html_e('One-click verification URL', 'StoreLinkforMC'); ?></li>
-            <li><code>{player}</code> – <?php esc_html_e('Minecraft username', 'StoreLinkforMC'); ?></li>
+            <li><code>{site_name}</code> – <?php esc_html_e('Your site name', 'storelinkformc'); ?></li>
+            <li><code>{user_email}</code> – <?php esc_html_e('Recipient email', 'storelinkformc'); ?></li>
+            <li><code>{verify_code}</code> – <?php esc_html_e('6-digit code', 'storelinkformc'); ?></li>
+            <li><code>{link_url}</code> – <?php esc_html_e('One-click verification URL', 'storelinkformc'); ?></li>
+            <li><code>{player}</code> – <?php esc_html_e('Minecraft username', 'storelinkformc'); ?></li>
         </ul>
 
         <form method="post">
@@ -113,7 +112,7 @@ function storelinkformc_email_templates_page() {
                 <tr>
                     <th scope="row">
                         <label for="slmc_tpl_link_subject">
-                            <?php esc_html_e('Subject', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Subject', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -124,14 +123,14 @@ function storelinkformc_email_templates_page() {
                                value="<?php echo esc_attr($subject); ?>"
                                required>
                         <button type="button" class="button" id="slmc_insert_default_subject" style="margin-left:8px;">
-                            <?php esc_html_e('Insert default', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Insert default', 'storelinkformc'); ?>
                         </button>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">
                         <label for="slmc_tpl_link_html">
-                            <?php esc_html_e('HTML Body', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('HTML Body', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -148,11 +147,11 @@ function storelinkformc_email_templates_page() {
                         wp_editor($body, $editor_id, $settings);
                         ?>
                         <p class="description">
-                            <?php esc_html_e('Visual editor with media support. Most email clients prefer simple HTML with inline styles and images by URL.', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Visual editor with media support. Most email clients prefer simple HTML with inline styles and images by URL.', 'storelinkformc'); ?>
                         </p>
                         <p>
                             <button type="button" class="button" id="slmc_insert_default_body">
-                                <?php esc_html_e('Insert default', 'StoreLinkforMC'); ?>
+                                <?php esc_html_e('Insert default', 'storelinkformc'); ?>
                             </button>
                         </p>
                     </td>
@@ -161,11 +160,11 @@ function storelinkformc_email_templates_page() {
 
             <p class="submit">
                 <button type="submit" name="slmc_email_tpl_save" class="button button-primary">
-                    <?php esc_html_e('Save templates', 'StoreLinkforMC'); ?>
+                    <?php esc_html_e('Save templates', 'storelinkformc'); ?>
                 </button>
                 <button type="submit" name="slmc_email_tpl_reset" class="button"
-                        onclick="return confirm('<?php echo esc_js(__('Reset to default templates?', 'StoreLinkforMC')); ?>');">
-                    <?php esc_html_e('Reset to defaults', 'StoreLinkforMC'); ?>
+                        onclick="return confirm('<?php echo esc_js(__('Reset to default templates?', 'storelinkformc')); ?>');">
+                    <?php esc_html_e('Reset to defaults', 'storelinkformc'); ?>
                 </button>
             </p>
         </form>

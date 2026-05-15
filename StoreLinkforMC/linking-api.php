@@ -93,7 +93,9 @@ function storelinkformc_request_link($request) {
 
     // Prevenir que se use un nombre ya vinculado
     $users = get_users([
+        // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
         'meta_key'   => 'minecraft_player',
+        // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
         'meta_value' => $player,
     ]);
     if (!empty($users)) {
@@ -214,14 +216,74 @@ function storelinkformc_api_get_pending($request) {
     }
 
     global $wpdb;
-    $table = $wpdb->prefix . 'pending_deliveries';
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_product_id = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'product_id'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_variation  = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'variation_id'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_expired    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expired'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_expires    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expires_at'));
+    $where_expires = current_time('mysql');
 
-    $rows = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT id, item, amount FROM $table WHERE player = %s AND delivered = 0",
-            $player
-        )
-    );
+    if ($has_product_id && $has_variation) {
+        if ($has_expired && $has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } elseif ($has_expired) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
+        } elseif ($has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
+        }
+    } elseif ($has_product_id) {
+        if ($has_expired && $has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } elseif ($has_expired) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
+        } elseif ($has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
+        }
+    } elseif ($has_variation) {
+        if ($has_expired && $has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } elseif ($has_expired) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
+        } elseif ($has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
+        }
+    } else {
+        if ($has_expired && $has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } elseif ($has_expired) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
+        } elseif ($has_expires) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
+        }
+    }
 
     return ['success' => true, 'deliveries' => $rows];
 }
@@ -255,19 +317,37 @@ function storelinkformc_api_mark_delivered($request) {
     }
 
     global $wpdb;
-    $table = $wpdb->prefix . 'pending_deliveries';
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_expired = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expired'));
 
+
+    $data    = ['delivered' => 1];
+    $formats = ['%d'];
+
+    if ($has_expired) {
+        // opcional, puedes quitarlo si no quieres tocar expired al entregar
+        $data['expired'] = 0;
+        $formats[] = '%d';
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $updated = $wpdb->update(
         $table,
-        ['delivered' => 1],
-        ['id' => $id],
-        ['%d'],
-        ['%d']
+        $data,
+        ['id' => $id, 'delivered' => 0],
+        $formats,
+        ['%d','%d']
     );
 
     if ($updated === false) {
         return new WP_REST_Response(['error' => 'Database update failed'], 500);
     }
+
+    if ($updated === 0) {
+        return new WP_REST_Response(['success' => false, 'message' => 'Already delivered or not found'], 200);
+    }
+
 
     return new WP_REST_Response(['success' => true, 'message' => 'Marked as delivered'], 200);
 }
@@ -300,6 +380,10 @@ function storelinkformc_mojang_check_username($nick) {
             'headers' => ['Accept' => 'application/json'],
         ]
     );
+    if (is_wp_error($resp)) {
+        return ['ok' => false, 'reason' => 'ERR'];
+    }
+
     $code = wp_remote_retrieve_response_code($resp);
 
     if ($code === 200) {

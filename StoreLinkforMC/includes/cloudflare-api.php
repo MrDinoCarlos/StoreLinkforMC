@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
  *
  * @return array|WP_Error
  */
-function storelinkformc_cf_request(string $method, string $path, string $api_token, array $body = null) {
+function storelinkformc_cf_request(string $method, string $path, string $api_token, ?array $body = null) {
     $url  = 'https://api.cloudflare.com/client/v4' . $path;
     $args = [
         'method'  => $method,

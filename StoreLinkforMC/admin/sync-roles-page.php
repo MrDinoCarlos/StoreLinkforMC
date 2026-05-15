@@ -25,7 +25,8 @@ function storelinkformc_sync_roles_page() {
         }
     }
 
-    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $request_method = isset($_SERVER['REQUEST_METHOD']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'])) : '';
+    if ('POST' === $request_method) {
         check_admin_referer('storelinkformc_sync_roles');
 
         // Save default linked role
@@ -33,58 +34,61 @@ function storelinkformc_sync_roles_page() {
             $selected = sanitize_text_field(wp_unslash($_POST['storelinkformc_selected_role']));
             if (in_array($selected, $editable_slugs, true)) {
                 update_option('storelinkformc_default_linked_role', $selected);
-                echo '<div class="updated notice"><p>' . esc_html__('✅ Role selection saved.', 'StoreLinkforMC') . '</p></div>';
+                echo '<div class="updated notice"><p>' . esc_html__('✅ Role selection saved.', 'storelinkformc') . '</p></div>';
             }
         }
 
         // Create new role
-        if (!empty($_POST['storelinkformc_new_role_slug']) && !empty($_POST['storelinkformc_new_role_name'])) {
-            $slug = sanitize_key(wp_unslash($_POST['storelinkformc_new_role_slug']));
-            $name = sanitize_text_field(wp_unslash($_POST['storelinkformc_new_role_name']));
+        $slug = isset($_POST['storelinkformc_new_role_slug']) ? sanitize_key(wp_unslash($_POST['storelinkformc_new_role_slug'])) : '';
+        $name = isset($_POST['storelinkformc_new_role_name']) ? sanitize_text_field(wp_unslash($_POST['storelinkformc_new_role_name'])) : '';
+        if ('' !== $slug && '' !== $name) {
 
             if (!preg_match('/^[a-z0-9_\-]{3,30}$/', $slug)) {
-                echo '<div class="notice notice-error"><p>' . esc_html__('⚠️ Invalid slug. Use lowercase letters, numbers, hyphens.', 'StoreLinkforMC') . '</p></div>';
+                echo '<div class="notice notice-error"><p>' . esc_html__('⚠️ Invalid slug. Use lowercase letters, numbers, hyphens.', 'storelinkformc') . '</p></div>';
             } elseif (!get_role($slug)) {
                 add_role($slug, $name, ['read' => true]);
-                echo '<div class="updated notice"><p>' . esc_html__('✅ New role created successfully.', 'StoreLinkforMC') . '</p></div>';
+                echo '<div class="updated notice"><p>' . esc_html__('✅ New role created successfully.', 'storelinkformc') . '</p></div>';
                 $all_roles      = get_editable_roles();
                 $editable_slugs = array_keys($all_roles);
             } else {
-                echo '<div class="notice notice-error"><p>' . esc_html__('⚠️ Role already exists.', 'StoreLinkforMC') . '</p></div>';
+                echo '<div class="notice notice-error"><p>' . esc_html__('⚠️ Role already exists.', 'storelinkformc') . '</p></div>';
             }
         }
 
         // Save product-role mapping
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         if (isset($_POST['storelinkformc_product_roles']) && is_array($_POST['storelinkformc_product_roles'])) {
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+            $product_roles_raw = wp_unslash($_POST['storelinkformc_product_roles']);
             $map = [];
-            foreach ($_POST['storelinkformc_product_roles'] as $product_id => $role) {
-                $role = sanitize_text_field(wp_unslash($role));
+            foreach ($product_roles_raw as $product_id => $role) {
+                $role = sanitize_text_field($role);
                 if (!empty($role) && in_array($role, $editable_slugs, true)) {
                     $map[(int) $product_id] = $role;
                 }
             }
             update_option('storelinkformc_product_roles_map', $map);
             $role_map = $map;
-            echo '<div class="updated notice"><p>' . esc_html__('✅ Product role mappings saved.', 'StoreLinkforMC') . '</p></div>';
+            echo '<div class="updated notice"><p>' . esc_html__('✅ Product role mappings saved.', 'storelinkformc') . '</p></div>';
         }
     }
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('Sync WordPress Roles with Minecraft Link', 'StoreLinkforMC'); ?></h1>
+        <h1><?php esc_html_e('Sync WordPress Roles with Minecraft Link', 'storelinkformc'); ?></h1>
         <form method="post">
             <?php wp_nonce_field('storelinkformc_sync_roles'); ?>
 
-            <h2><?php esc_html_e('Assign Role on Minecraft Link', 'StoreLinkforMC'); ?></h2>
+            <h2><?php esc_html_e('Assign Role on Minecraft Link', 'storelinkformc'); ?></h2>
             <table class="form-table">
                 <tr>
                     <th scope="row">
                         <label for="storelinkformc_selected_role">
-                            <?php esc_html_e('Select Role', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Select Role', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
                         <select name="storelinkformc_selected_role" id="storelinkformc_selected_role">
-                            <option value=""><?php esc_html_e('— NONE —', 'StoreLinkforMC'); ?></option>
+                            <option value=""><?php esc_html_e('— NONE —', 'storelinkformc'); ?></option>
                             <?php foreach ($all_roles as $slug => $details) : ?>
                                 <option value="<?php echo esc_attr($slug); ?>" <?php selected($selected_role, $slug); ?>>
                                     <?php echo esc_html($details['name']); ?>
@@ -92,18 +96,18 @@ function storelinkformc_sync_roles_page() {
                             <?php endforeach; ?>
                         </select>
                         <p class="description">
-                            <?php esc_html_e('This role will be assigned when a Minecraft account is linked.', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('This role will be assigned when a Minecraft account is linked.', 'storelinkformc'); ?>
                         </p>
                     </td>
                 </tr>
             </table>
 
-            <h2><?php esc_html_e('Create New Role', 'StoreLinkforMC'); ?></h2>
+            <h2><?php esc_html_e('Create New Role', 'storelinkformc'); ?></h2>
             <table class="form-table">
                 <tr>
                     <th scope="row">
                         <label for="storelinkformc_new_role_name">
-                            <?php esc_html_e('Role Name', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Role Name', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -113,7 +117,7 @@ function storelinkformc_sync_roles_page() {
                 <tr>
                     <th scope="row">
                         <label for="storelinkformc_new_role_slug">
-                            <?php esc_html_e('Role Slug', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Role Slug', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -122,15 +126,15 @@ function storelinkformc_sync_roles_page() {
                 </tr>
             </table>
 
-            <h2><?php esc_html_e('Assign Roles by Product', 'StoreLinkforMC'); ?></h2>
+            <h2><?php esc_html_e('Assign Roles by Product', 'storelinkformc'); ?></h2>
             <p>
-                <?php esc_html_e('These are the products currently set to sync with Minecraft. Choose which role to assign when each is purchased.', 'StoreLinkforMC'); ?>
+                <?php esc_html_e('These are the products currently set to sync with Minecraft. Choose which role to assign when each is purchased.', 'storelinkformc'); ?>
             </p>
             <table class="widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><?php esc_html_e('Product', 'StoreLinkforMC'); ?></th>
-                        <th><?php esc_html_e('Role', 'StoreLinkforMC'); ?></th>
+                        <th><?php esc_html_e('Product', 'storelinkformc'); ?></th>
+                        <th><?php esc_html_e('Role', 'storelinkformc'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -139,7 +143,7 @@ function storelinkformc_sync_roles_page() {
                             <td><?php echo esc_html($product->get_name()); ?></td>
                             <td>
                                 <select name="storelinkformc_product_roles[<?php echo esc_attr($product->get_id()); ?>]">
-                                    <option value=""><?php esc_html_e('— NONE —', 'StoreLinkforMC'); ?></option>
+                                    <option value=""><?php esc_html_e('— NONE —', 'storelinkformc'); ?></option>
                                     <?php foreach ($all_roles as $slug => $details) : ?>
                                         <option value="<?php echo esc_attr($slug); ?>" <?php selected($role_map[$product->get_id()] ?? '', $slug); ?>>
                                             <?php echo esc_html($details['name']); ?>
@@ -153,7 +157,7 @@ function storelinkformc_sync_roles_page() {
             </table>
 
             <br />
-            <?php submit_button(__('Save All Role Settings', 'StoreLinkforMC')); ?>
+            <?php submit_button(__('Save All Role Settings', 'storelinkformc')); ?>
         </form>
     </div>
     <?php

@@ -6,8 +6,8 @@ if (!defined('ABSPATH')) {
 add_action('admin_menu', function () {
     add_submenu_page(
         'storelinkformc',
-        __('Checkout Fields', 'StoreLinkforMC'),
-        __('Checkout Fields', 'StoreLinkforMC'),
+        __('Checkout Fields', 'storelinkformc'),
+        __('Checkout Fields', 'storelinkformc'),
         'manage_options',
         'storelinkformc_checkout_fields',
         'storelinkformc_checkout_fields_page'
@@ -27,45 +27,48 @@ function storelinkformc_checkout_fields_page() {
         )
     ) {
         $fields = [];
-        if (isset($_POST['checkout_fields'])) {
-            $raw_fields = (array) wp_unslash($_POST['checkout_fields']);
-            $fields     = array_map('sanitize_text_field', $raw_fields);
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        if (isset($_POST['checkout_fields']) && is_array($_POST['checkout_fields'])) {
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+            foreach (wp_unslash($_POST['checkout_fields']) as $raw_field) {
+                $fields[] = sanitize_key($raw_field);
+            }
         }
 
         update_option('storelinkformc_checkout_fields', $fields);
-        echo '<div class="updated"><p>' . esc_html__('Settings saved successfully.', 'StoreLinkforMC') . '</p></div>';
+        echo '<div class="updated"><p>' . esc_html__('Settings saved successfully.', 'storelinkformc') . '</p></div>';
     }
 
     $selected_fields = get_option('storelinkformc_checkout_fields', []);
     $all_fields      = [
-        'minecraft_username'   => __('Minecraft Username', 'StoreLinkforMC'),
-        'minecraft_gift'       => __('Gift this to another player', 'StoreLinkforMC'),
-        'billing_first_name'   => __('Billing First Name', 'StoreLinkforMC'),
-        'billing_last_name'    => __('Billing Last Name', 'StoreLinkforMC'),
-        'billing_email'        => __('Billing Email', 'StoreLinkforMC'),
-        'billing_address_1'    => __('Billing Address Line 1', 'StoreLinkforMC'),
-        'billing_city'         => __('Billing City', 'StoreLinkforMC'),
-        'billing_postcode'     => __('Billing Postal Code', 'StoreLinkforMC'),
-        'billing_country'      => __('Billing Country', 'StoreLinkforMC'),
-        'billing_state'        => __('Billing State/Province', 'StoreLinkforMC'),
-        'shipping_first_name'  => __('Shipping First Name', 'StoreLinkforMC'),
-        'shipping_last_name'   => __('Shipping Last Name', 'StoreLinkforMC'),
-        'shipping_address_1'   => __('Shipping Address Line 1', 'StoreLinkforMC'),
-        'shipping_city'        => __('Shipping City', 'StoreLinkforMC'),
-        'shipping_postcode'    => __('Shipping Postal Code', 'StoreLinkforMC'),
-        'shipping_country'     => __('Shipping Country', 'StoreLinkforMC'),
-        'shipping_state'       => __('Shipping State/Province', 'StoreLinkforMC'),
+        'minecraft_username'   => __('Minecraft Username', 'storelinkformc'),
+        'minecraft_gift'       => __('Gift this to another player', 'storelinkformc'),
+        'billing_first_name'   => __('Billing First Name', 'storelinkformc'),
+        'billing_last_name'    => __('Billing Last Name', 'storelinkformc'),
+        'billing_email'        => __('Billing Email', 'storelinkformc'),
+        'billing_address_1'    => __('Billing Address Line 1', 'storelinkformc'),
+        'billing_city'         => __('Billing City', 'storelinkformc'),
+        'billing_postcode'     => __('Billing Postal Code', 'storelinkformc'),
+        'billing_country'      => __('Billing Country', 'storelinkformc'),
+        'billing_state'        => __('Billing State/Province', 'storelinkformc'),
+        'shipping_first_name'  => __('Shipping First Name', 'storelinkformc'),
+        'shipping_last_name'   => __('Shipping Last Name', 'storelinkformc'),
+        'shipping_address_1'   => __('Shipping Address Line 1', 'storelinkformc'),
+        'shipping_city'        => __('Shipping City', 'storelinkformc'),
+        'shipping_postcode'    => __('Shipping Postal Code', 'storelinkformc'),
+        'shipping_country'     => __('Shipping Country', 'storelinkformc'),
+        'shipping_state'       => __('Shipping State/Province', 'storelinkformc'),
     ];
 
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('Checkout Field Settings', 'StoreLinkforMC'); ?></h1>
+        <h1><?php esc_html_e('Checkout Field Settings', 'storelinkformc'); ?></h1>
         <form method="post">
             <?php wp_nonce_field('storelinkformc_save_checkout_fields', 'storelinkformc_checkout_fields_nonce'); ?>
 
             <table class="form-table">
                 <tr>
-                    <th><?php esc_html_e('Fields to ask during checkout:', 'StoreLinkforMC'); ?></th>
+                    <th><?php esc_html_e('Fields to ask during checkout:', 'storelinkformc'); ?></th>
                 </tr>
                 <?php foreach ($all_fields as $key => $label) : ?>
                     <tr>
@@ -83,9 +86,9 @@ function storelinkformc_checkout_fields_page() {
             </table>
 
             <p class="description">
-                <?php esc_html_e('Only the selected fields will be shown during WooCommerce checkout.', 'StoreLinkforMC'); ?>
+                <?php esc_html_e('Only the selected fields will be shown during WooCommerce checkout.', 'storelinkformc'); ?>
             </p>
-            <?php submit_button(__('Save Settings', 'StoreLinkforMC')); ?>
+            <?php submit_button(__('Save Settings', 'storelinkformc')); ?>
         </form>
     </div>
     <?php
@@ -127,7 +130,7 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
     if ($cart_has_synced && in_array('minecraft_gift', $allowed, true)) {
         $fields['billing']['minecraft_gift'] = [
             'type'     => 'checkbox',
-            'label'    => __('🎁 This is a gift', 'StoreLinkforMC'),
+            'label'    => __('🎁 This is a gift', 'storelinkformc'),
             'required' => false,
             'priority' => 9998,
             'class'    => ['form-row-wide'],
@@ -145,14 +148,14 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
         }
 
         $fields['billing']['minecraft_username'] = [
-            'label'             => __('Minecraft Username', 'StoreLinkforMC'),
+            'label'             => __('Minecraft Username', 'storelinkformc'),
             'type'              => 'text',
             'required'          => false,
             'default'           => $mc_name ?: '',
             'description'       => !empty($mc_name)
-                ? __('Your linked Minecraft username will be used unless you mark this order as a gift.', 'StoreLinkforMC')
-                : __('Enter the recipient’s Minecraft username when gifting.', 'StoreLinkforMC'),
-            'placeholder'       => __('Recipient username (required for gifts)', 'StoreLinkforMC'),
+                ? __('Your linked Minecraft username will be used unless you mark this order as a gift.', 'storelinkformc')
+                : __('Enter the recipient’s Minecraft username when gifting.', 'storelinkformc'),
+            'placeholder'       => __('Recipient username (required for gifts)', 'storelinkformc'),
             'priority'          => 9999,
             'class'             => ['form-row-wide'],
             'custom_attributes' => $custom_attributes,
@@ -171,12 +174,16 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
         return;
     }
 
+    // WooCommerce checkout submission; WooCommerce owns nonce validation here.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
     if (isset($_POST['minecraft_username'])) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $username = sanitize_text_field(wp_unslash($_POST['minecraft_username']));
         update_post_meta($order_id, '_minecraft_username', $username);
     }
 
-    $gift_raw = $_POST['minecraft_gift'] ?? '';
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $gift_raw = isset($_POST['minecraft_gift']) ? sanitize_text_field(wp_unslash($_POST['minecraft_gift'])) : '';
     if (!empty($gift_raw)) {
         update_post_meta($order_id, '_minecraft_gift', 'yes');
     } else {
@@ -189,7 +196,7 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
 add_action('woocommerce_admin_order_data_after_billing_address', function ($order) {
     $player = get_post_meta($order->get_id(), '_minecraft_username', true);
     if ($player) {
-        echo '<p><strong>' . esc_html__('Minecraft Username:', 'StoreLinkforMC') . '</strong> ' . esc_html($player) . '</p>';
+        echo '<p><strong>' . esc_html__('Minecraft Username:', 'storelinkformc') . '</strong> ' . esc_html($player) . '</p>';
     }
 });
 
@@ -222,11 +229,15 @@ add_action('woocommerce_checkout_process', function () {
     $has_gift_field     = in_array('minecraft_gift', $allowed, true);
 
     // Read form
-    $gift_raw = $_POST['minecraft_gift'] ?? '';
+    // WooCommerce checkout submission; WooCommerce owns nonce validation here.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $gift_raw = isset($_POST['minecraft_gift']) ? sanitize_text_field(wp_unslash($_POST['minecraft_gift'])) : '';
     $gift     = !empty($gift_raw); // checkbox present only when checked
 
     $nick = '';
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
     if (isset($_POST['minecraft_username'])) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $nick = sanitize_text_field(wp_unslash($_POST['minecraft_username']));
     }
 
@@ -237,7 +248,7 @@ add_action('woocommerce_checkout_process', function () {
             wc_add_notice(
                 __(
                     'Please log in and link your Minecraft account to purchase for yourself. You can also tick "This is a gift" to buy for another player.',
-                    'StoreLinkforMC'
+                    'storelinkformc'
                 ),
                 'error'
             );
@@ -251,7 +262,7 @@ add_action('woocommerce_checkout_process', function () {
             wc_add_notice(
                 __(
                     'This store requires you to link your Minecraft account before purchasing for yourself. Either link your account first or tick "This is a gift".',
-                    'StoreLinkforMC'
+                    'storelinkformc'
                 ),
                 'error'
             );
@@ -266,7 +277,7 @@ add_action('woocommerce_checkout_process', function () {
     // CASE B) Gift => validate the provided recipient username
     // Make sure the username field is present when gifting
     if ($has_username_field && empty($nick)) {
-        wc_add_notice(__('Please enter the recipient\'s Minecraft username.', 'StoreLinkforMC'), 'error');
+        wc_add_notice(__('Please enter the recipient\'s Minecraft username.', 'storelinkformc'), 'error');
         return;
     }
 
@@ -274,34 +285,37 @@ add_action('woocommerce_checkout_process', function () {
     $policy = get_option('storelinkformc_username_policy', 'premium');
     if ($policy === 'premium') {
         if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $nick)) {
-            wc_add_notice(__('Invalid Minecraft username format.', 'StoreLinkforMC'), 'error');
+            wc_add_notice(__('Invalid Minecraft username format.', 'storelinkformc'), 'error');
             return;
         }
 
         // Uses the helper from linking-api.php
         if (!function_exists('storelinkformc_mojang_check_username')) {
-            wc_add_notice(__('Internal error: Mojang validator not found.', 'StoreLinkforMC'), 'error');
+            wc_add_notice(__('Internal error: Mojang validator not found.', 'storelinkformc'), 'error');
             return;
         }
 
         $check = storelinkformc_mojang_check_username($nick);
         if (!$check['ok']) {
             if ($check['reason'] === 'ERR') {
-                wc_add_notice(__('Mojang verification is temporarily unavailable. Please try again.', 'StoreLinkforMC'), 'error');
+                wc_add_notice(__('Mojang verification is temporarily unavailable. Please try again.', 'storelinkformc'), 'error');
             } else {
-                wc_add_notice(__('❌ That Minecraft username does not exist on Mojang.', 'StoreLinkforMC'), 'error');
+                wc_add_notice(__('❌ That Minecraft username does not exist on Mojang.', 'storelinkformc'), 'error');
             }
             return;
         }
 
         // Make the resolved UUID available to the save hook
-        $_POST['minecraft_uuid_resolved'] = $check['uuid'];
+        $_POST['minecraft_uuid_resolved'] = sanitize_text_field($check['uuid']);
     }
 });
 
 add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
+    // WooCommerce checkout submission; WooCommerce owns nonce validation here.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
     if (!empty($_POST['minecraft_uuid_resolved'])) {
-        $raw = wp_unslash($_POST['minecraft_uuid_resolved']);
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $raw = sanitize_text_field(wp_unslash($_POST['minecraft_uuid_resolved']));
         $raw = preg_replace('/[^a-f0-9]/i', '', $raw);
         $uuid = substr($raw, 0, 8) . '-' .
             substr($raw, 8, 4) . '-' .
@@ -325,7 +339,7 @@ add_action('woocommerce_before_checkout_form', function () {
         return;
     }
 
-    if (!function_exists('wc_print_notice') || !is_checkout()) {
+    if (!function_exists('wc_print_notice') || !function_exists('is_checkout') || !is_checkout()) {
         return;
     }
 
@@ -341,8 +355,8 @@ add_action('woocommerce_before_checkout_form', function () {
     // Build the message depending on login/link status
     if (!is_user_logged_in()) {
         $msg = '<div class="storelinkformc-linking-notice">'
-             . __('To purchase for yourself, please <strong>log in and link your Minecraft account</strong>. ', 'StoreLinkforMC')
-             . ($has_gift_field ? __('Or tick <em>"This is a gift"</em> to buy for another player.', 'StoreLinkforMC') : '')
+             . __('To purchase for yourself, please <strong>log in and link your Minecraft account</strong>. ', 'storelinkformc')
+             . ($has_gift_field ? __('Or tick <em>"This is a gift"</em> to buy for another player.', 'storelinkformc') : '')
              . '</div>';
         wc_print_notice($msg, 'notice');
         return;
@@ -351,8 +365,8 @@ add_action('woocommerce_before_checkout_form', function () {
     $linked = get_user_meta(get_current_user_id(), 'minecraft_player', true);
     if (!$linked) {
         $msg = '<div class="storelinkformc-linking-notice">'
-             . __('You are not linked. To purchase for yourself, please <strong>link your Minecraft account</strong>. ', 'StoreLinkforMC')
-             . ($has_gift_field ? __('Alternatively, tick <em>"This is a gift"</em> to buy for another player.', 'StoreLinkforMC') : '')
+             . __('You are not linked. To purchase for yourself, please <strong>link your Minecraft account</strong>. ', 'storelinkformc')
+             . ($has_gift_field ? __('Alternatively, tick <em>"This is a gift"</em> to buy for another player.', 'storelinkformc') : '')
              . '</div>';
         wc_print_notice($msg, 'notice');
     }
@@ -365,7 +379,7 @@ add_action('wp_enqueue_scripts', function () {
         return;
     }
 
-    if (!is_checkout()) {
+    if (!function_exists('is_checkout') || !is_checkout()) {
         return;
     }
 

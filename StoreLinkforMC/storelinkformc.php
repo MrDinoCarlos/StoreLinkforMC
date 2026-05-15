@@ -3,16 +3,21 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://mrdino.es/woostorelink-plugin/
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.32
+Version: 1.0.35
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos
 Author URI: https://discord.gg/ddyfucfZpy
 License: GPL2
-Text Domain: StoreLinkforMC
+Text Domain: storelinkformc
 Domain Path: /languages
 */
 
+if (defined('STORELINKFORMC_LOADED')) {
+    return;
+}
+
+define('STORELINKFORMC_LOADED', true);
 
 if (!defined('ABSPATH')) exit;
 if (!defined('STORELINKFORMC_PRO')) define('STORELINKFORMC_PRO', false);
@@ -33,7 +38,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-checkout-avatar.p
 
 
 // Load admin SMTP notice (safe include)
-$storelinkformc_admin_notice = plugin_dir_path(__FILE__) . 'includes/admin-smtp-notice.php';
+$storelinkformc_admin_notice = plugin_dir_path(__FILE__) . 'admin/admin-smtp-notice.php';
 if (file_exists($storelinkformc_admin_notice)) {
     require_once $storelinkformc_admin_notice;
 }
@@ -44,6 +49,71 @@ if (!function_exists('storelinkformc_force_link_enabled')) {
         return get_option('storelinkformc_force_link', 'yes') === 'yes';
     }
 }
+
+if (!function_exists('storelinkformc_get_delivery_expiration_seconds')) {
+    /**
+     * Returns the configured expiration time (in seconds) for unclaimed deliveries.
+     * Default: 30 days.
+     */
+    function storelinkformc_get_delivery_expiration_seconds(): int {
+        $opt = get_option('storelinkformc_delivery_expiration', null);
+
+        // New format: array with 'seconds'
+        if (is_array($opt)) {
+            if (isset($opt['seconds']) && is_numeric($opt['seconds'])) {
+                $seconds = (int) $opt['seconds'];
+                $unit    = isset($opt['unit']) ? sanitize_text_field($opt['unit']) : '';
+                $value   = isset($opt['value']) ? (int) $opt['value'] : 0;
+
+                if ('seconds' === $unit && $value <= 10 && $seconds <= 10) {
+                    $seconds = 30 * 86400;
+                }
+            } else {
+                $value = isset($opt['value']) ? (int) $opt['value'] : 30;
+                $unit  = isset($opt['unit']) ? sanitize_text_field($opt['unit']) : 'days';
+
+                $unit_seconds = [
+                    'seconds' => 1,
+                    'minutes' => 60,
+                    'hours'   => 3600,
+                    'days'    => 86400,
+                    'weeks'   => 604800,
+                    // For expiration purposes we use approximations:
+                    'months'  => 2592000,   // 30 days
+                    'years'   => 31536000,  // 365 days
+                ];
+
+                if (!isset($unit_seconds[$unit])) {
+                    $unit = 'days';
+                }
+                if ($value < 1) {
+                    $value = 1;
+                }
+
+                $seconds = (int) ($value * $unit_seconds[$unit]);
+            }
+        } elseif (is_numeric($opt)) {
+            // Backwards compatibility if a raw seconds value exists.
+            $seconds = (int) $opt;
+            if ($seconds <= 10) {
+                $seconds = 30 * 86400;
+            }
+        } else {
+            // Default: 30 days
+            $seconds = 30 * 86400;
+        }
+
+        // Clamp: 1 second .. 999 years
+        $min_seconds = 1;
+        $max_seconds = 999 * 31536000;
+
+        if ($seconds < $min_seconds) $seconds = $min_seconds;
+        if ($seconds > $max_seconds) $seconds = $max_seconds;
+
+        return $seconds;
+    }
+}
+
 
 if (!function_exists('storelinkformc_cart_has_synced_products')) {
     /**
@@ -60,9 +130,9 @@ if (!function_exists('storelinkformc_cart_has_synced_products')) {
             return false;
         }
 
-        $synced_products = get_option('storelinkformc_sync_products', []);
+        $synced_products = array_map('absint', (array) get_option('storelinkformc_sync_products', []));
 
-        if (empty($synced_products) || !is_array($synced_products)) {
+        if (empty($synced_products)) {
             return false;
         }
 
@@ -82,30 +152,79 @@ if (!function_exists('storelinkformc_cart_has_synced_products')) {
     }
 }
 
+/**
+ * Upgrade routine (safe on updates). Ensures new columns exist without needing reactivation.
+ */
+add_action('plugins_loaded', function () {
+    $db_ver = get_option('storelinkformc_db_version', '1.0.0');
+
+    if (version_compare($db_ver, '1.0.35', '<')) {
+        if (function_exists('storelinkformc_create_or_update_tables')) {
+            storelinkformc_create_or_update_tables();
+        }
+        update_option('storelinkformc_db_version', '1.0.35');
+    }
+
+    // Ensure cron exists even if the plugin was updated without reactivation.
+    if (!wp_next_scheduled('storelinkformc_cleanup_expired_deliveries')) {
+        wp_schedule_event(time() + 300, 'hourly', 'storelinkformc_cleanup_expired_deliveries');
+    }
+});
+
+add_action('admin_init', function () {
+    if (!get_option('storelinkformc_needs_activation_setup')) {
+        return;
+    }
+
+    delete_option('storelinkformc_needs_activation_setup');
+
+    if (function_exists('storelinkformc_create_or_update_tables')) {
+        storelinkformc_create_or_update_tables();
+        update_option('storelinkformc_db_version', '1.0.35');
+    }
+
+    storelinkformc_force_classic_checkout(true);
+
+    if (!wp_next_scheduled('storelinkformc_cleanup_expired_deliveries')) {
+        wp_schedule_event(time() + 300, 'hourly', 'storelinkformc_cleanup_expired_deliveries');
+    }
+});
+
+
 // === INSTALL / SELF-HEAL =====================================================
 register_activation_hook(__FILE__, 'storelinkformc_install');
 
 function storelinkformc_install() {
-    storelinkformc_create_or_update_tables();
-    storelinkformc_force_classic_checkout(true); // true = forzar en activación
+    update_option('storelinkformc_needs_activation_setup', 1);
 }
-
-add_action('admin_init', function () {
-    // Autocuración silenciosa si alguien migró sin activar correctamente
-    global $wpdb;
-    $table = $wpdb->prefix . 'pending_deliveries';
-    $exists = $wpdb->get_var( $wpdb->prepare("SHOW TABLES LIKE %s", $table) );
-    if ($exists !== $table) {
-        storelinkformc_create_or_update_tables();
+register_deactivation_hook(__FILE__, function () {
+    $timestamp = wp_next_scheduled('storelinkformc_cleanup_expired_deliveries');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'storelinkformc_cleanup_expired_deliveries');
     }
 });
+
+
+add_action('admin_init', function () {
+    global $wpdb;
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+    $db_ver = get_option('storelinkformc_db_version', '1.0.0');
+
+    if ($exists !== $table || version_compare($db_ver, '1.0.35', '<')) {
+        storelinkformc_create_or_update_tables();
+        update_option('storelinkformc_db_version', '1.0.35');
+    }
+});
+
 
 /**
  * Crea/actualiza tablas necesarias del plugin.
  */
 function storelinkformc_create_or_update_tables() {
     global $wpdb;
-    $table   = $wpdb->prefix . 'pending_deliveries';
+    $table   = esc_sql($wpdb->prefix . 'pending_deliveries');
     $charset = $wpdb->get_charset_collate();
 
     // Mantén este esquema en línea con lo que usa el plugin
@@ -118,16 +237,98 @@ function storelinkformc_create_or_update_tables() {
             amount INT DEFAULT 1,
             delivered TINYINT(1) DEFAULT 0,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME NULL,
+            expired TINYINT(1) DEFAULT 0,
             PRIMARY KEY (id),
             KEY order_id (order_id),
             KEY player (player),
-            KEY delivered (delivered)
+            KEY delivered (delivered),
+            KEY expires_at (expires_at),
+            KEY expired (expired)
         ) $charset;
     ";
 
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    storelinkformc_maybe_add_pending_delivery_column($table, 'product_id', 'BIGINT UNSIGNED DEFAULT 0');
+    storelinkformc_maybe_add_pending_delivery_column($table, 'variation_id', 'BIGINT UNSIGNED DEFAULT 0');
+    storelinkformc_maybe_add_pending_delivery_index($table, 'product_id');
+    storelinkformc_maybe_add_pending_delivery_index($table, 'variation_id');
 }
+
+function storelinkformc_maybe_add_pending_delivery_column($table, $column, $definition) {
+    global $wpdb;
+
+    $table  = esc_sql($table);
+    $column = sanitize_key($column);
+    if (!$column) {
+        return;
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", $column));
+    if ($exists) {
+        return;
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    $wpdb->query("ALTER TABLE {$table} ADD {$column} {$definition}");
+}
+
+function storelinkformc_maybe_add_pending_delivery_index($table, $index) {
+    global $wpdb;
+
+    $table = esc_sql($table);
+    $index = sanitize_key($index);
+    if (!$index) {
+        return;
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    $exists = $wpdb->get_var($wpdb->prepare("SHOW INDEX FROM {$table} WHERE Key_name = %s", $index));
+    if ($exists) {
+        return;
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    $wpdb->query("ALTER TABLE {$table} ADD INDEX {$index} ({$index})");
+}
+
+/**
+ * Cron: mark unclaimed deliveries as expired once they pass expires_at.
+ */
+add_action('storelinkformc_cleanup_expired_deliveries', function () {
+    global $wpdb;
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+
+    // Only run if columns exist (safe on old DBs)
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $col_expired = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM $table LIKE %s", 'expired'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $col_expires = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM $table LIKE %s", 'expires_at'));
+    if (!$col_expired || !$col_expires) {
+        return;
+    }
+
+    $now = current_time('mysql');
+
+    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+    $wpdb->query(
+        $wpdb->prepare(
+            "UPDATE $table
+             SET expired = 1
+             WHERE delivered = 0
+               AND expired = 0
+               AND expires_at IS NOT NULL
+               AND expires_at < %s",
+            $now
+        )
+    );
+    // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+});
+
 
 /**
  * Reemplaza el Checkout de WooCommerce por el shortcode clásico.
@@ -234,11 +435,28 @@ add_action('woocommerce_order_status_processing', 'storelinkformc_create_pending
 add_action('woocommerce_order_status_completed', 'storelinkformc_create_pending_delivery');
 
 function storelinkformc_create_pending_delivery($order_id) {
+    if (!function_exists('wc_get_order')) {
+        return;
+    }
+
     $order = wc_get_order($order_id);
     if (!$order || !is_a($order, 'WC_Order')) return;
 
     global $wpdb;
     $user_id = $order->get_user_id();
+
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+
+    // Detectar columnas una sola vez por pedido
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_expires    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expires_at'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_expired    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expired'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_product_id = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'product_id'));
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $has_variation  = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'variation_id'));
+
 
     // NUEVO: leer el meta unificado
     $target_type = get_post_meta($order_id, '_slmc_target_type', true); // 'gift' | 'linked' | 'manual_username'
@@ -261,52 +479,86 @@ function storelinkformc_create_pending_delivery($order_id) {
 
     if (empty($player_name)) return;
 
-    $allowed_products = get_option('storelinkformc_sync_products', []);
-    $product_roles    = get_option('storelinkformc_product_roles_map', []);
+    $allowed_products = array_map('absint', (array) get_option('storelinkformc_sync_products', []));
+    $product_roles    = (array) get_option('storelinkformc_product_roles_map', []);
     $user             = new WP_User($user_id);
 
     foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
+        if (!is_a($item, 'WC_Order_Item_Product')) {
+            continue;
+        }
+
+        $product_id   = absint($item->get_product_id());
+        $variation_id = absint($item->get_variation_id());
+        $sync_id      = ($variation_id && in_array($variation_id, $allowed_products, true)) ? $variation_id : $product_id;
+        $role_id      = isset($product_roles[$sync_id]) ? $sync_id : $product_id;
 
         // Roles
-        if (isset($product_roles[$product_id])) {
-            $role = sanitize_text_field($product_roles[$product_id]);
+        if ($user_id && isset($product_roles[$role_id])) {
+            $role = sanitize_text_field($product_roles[$role_id]);
             if (!user_can($user_id, $role)) {
                 $user->add_role($role);
             }
         }
 
-        if (!in_array($product_id, $allowed_products, true)) {
+        if (!$sync_id || !in_array($sync_id, $allowed_products, true)) {
             continue;
         }
 
         $product_name = sanitize_text_field(strtolower($item->get_name()));
         $quantity     = (int) $item->get_quantity();
 
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         $exists = $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}pending_deliveries WHERE order_id=%d AND player=%s AND item=%s",
+                "SELECT COUNT(*) FROM {$table} WHERE order_id=%d AND player=%s AND item=%s",
                 $order_id,
                 $player_name,
                 $product_name
             )
         );
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
         if ($exists) {
             continue;
         }
 
-        $wpdb->insert(
-            "{$wpdb->prefix}pending_deliveries",
-            [
-                'order_id'  => $order_id,
-                'player'    => $player_name,
-                'item'      => $product_name,
-                'amount'    => $quantity,
-                'delivered' => 0,
-                'timestamp' => current_time('mysql'),
-            ],
-            ['%d', '%s', '%s', '%d', '%d', '%s']
-        );
+        $data = [
+            'order_id'  => $order_id,
+            'player'    => $player_name,
+            'item'      => $product_name,
+            'amount'    => $quantity,
+            'delivered' => 0,
+            'timestamp' => current_time('mysql'),
+        ];
+
+        $formats = ['%d', '%s', '%s', '%d', '%d', '%s'];
+
+        if ($has_product_id) {
+            $data['product_id'] = $product_id;
+            $formats[] = '%d';
+        }
+
+        if ($has_variation) {
+            $data['variation_id'] = $variation_id;
+            $formats[] = '%d';
+        }
+
+        if ($has_expires) {
+            $data['expires_at'] = wp_date(
+                'Y-m-d H:i:s',
+                current_time('timestamp') + storelinkformc_get_delivery_expiration_seconds()
+            );
+            $formats[] = '%s';
+        }
+
+        if ($has_expired) {
+            $data['expired'] = 0;
+            $formats[] = '%d';
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->insert($table, $data, $formats);
+
     }
 }
 
@@ -317,17 +569,30 @@ add_action('woocommerce_order_status_refunded', 'storelinkformc_remove_roles_for
 add_action('woocommerce_order_status_failed', 'storelinkformc_remove_roles_for_order');
 
 function storelinkformc_remove_roles_for_order($order_id) {
+    if (!function_exists('wc_get_order')) {
+        return;
+    }
+
     $order = wc_get_order($order_id);
     if (!$order) return;
 
     $user_id = $order->get_user_id();
-    $product_roles = get_option('storelinkformc_product_roles_map', []);
+    $product_roles = (array) get_option('storelinkformc_product_roles_map', []);
+    $sync_products = array_map('absint', (array) get_option('storelinkformc_sync_products', []));
     $user = new WP_User($user_id);
 
     foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
-        if (isset($product_roles[$product_id])) {
-            $role = sanitize_text_field($product_roles[$product_id]);
+        if (!is_a($item, 'WC_Order_Item_Product')) {
+            continue;
+        }
+
+        $product_id   = absint($item->get_product_id());
+        $variation_id = absint($item->get_variation_id());
+        $sync_id      = ($variation_id && in_array($variation_id, $sync_products, true)) ? $variation_id : $product_id;
+        $role_id      = isset($product_roles[$sync_id]) ? $sync_id : $product_id;
+
+        if (isset($product_roles[$role_id])) {
+            $role = sanitize_text_field($product_roles[$role_id]);
             if (user_can($user_id, $role)) {
                 $user->remove_role($role);
             }
@@ -486,24 +751,10 @@ function storelinkformc_enqueue_checkout_script() {
     );
 }
 
-add_action('wp_ajax_storelinkformc_unlink_account', 'storelinkformc_handle_unlink');
-
-function storelinkformc_handle_unlink() {
-    check_ajax_referer('storelinkformc_unlink_action', 'security');
-
-    $user_id = get_current_user_id();
-    if (!$user_id) {
-        wp_send_json_error('User not logged in');
-    }
-
-    delete_user_meta($user_id, 'minecraft_player');
-    wp_send_json_success('Minecraft account unlinked');
-}
-
 // Personalize the "order received" message on the thank you page
 add_filter('woocommerce_thankyou_order_received_text', 'storelinkformc_thankyou_text', 10, 2);
 function storelinkformc_thankyou_text($text, $order) {
-    if (!$order instanceof WC_Order) {
+    if (!class_exists('WC_Order') || !$order instanceof WC_Order) {
         return $text;
     }
 
@@ -523,8 +774,8 @@ function storelinkformc_thankyou_text($text, $order) {
             $replacement = '$1, ' . esc_html($player_to_show) . '.';
             $text = preg_replace($pattern, $replacement, $text, 1);
         } else {
-            /* translators: %s: Minecraft username linked to the customer account. */
             $prefix = sprintf(
+                /* translators: %s: Minecraft username linked to the customer account. */
                 __('Thank you, %s.', 'storelinkformc'),
                 esc_html($player_to_show)
             );
@@ -536,9 +787,15 @@ function storelinkformc_thankyou_text($text, $order) {
     $allowed_products = get_option('storelinkformc_sync_products', []);
     $has_synced = false;
     if (is_array($allowed_products) && !empty($allowed_products)) {
+        $allowed_products = array_map('absint', $allowed_products);
         foreach ($order->get_items() as $item) {
-            $pid = $item->get_product_id();
-            if (in_array($pid, $allowed_products, true)) {
+            if (!is_a($item, 'WC_Order_Item_Product')) {
+                continue;
+            }
+
+            $pid = absint($item->get_product_id());
+            $vid = absint($item->get_variation_id());
+            if (in_array($pid, $allowed_products, true) || ($vid && in_array($vid, $allowed_products, true))) {
                 $has_synced = true;
                 break;
             }
@@ -547,8 +804,8 @@ function storelinkformc_thankyou_text($text, $order) {
 
     if ($has_synced) {
         if ($gift && !empty($recipient)) {
-            /* translators: %s: Minecraft username that will receive the gift on the server. */
             $extra = sprintf(
+                /* translators: %s: Minecraft username that will receive the gift on the server. */
                 __(' Your item(s) will be delivered on the server to %s as soon as possible.', 'storelinkformc'),
                 esc_html($recipient)
             );

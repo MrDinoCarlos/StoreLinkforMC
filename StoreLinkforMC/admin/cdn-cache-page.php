@@ -7,8 +7,8 @@ if (!defined('ABSPATH')) {
 add_action('admin_menu', function () {
     add_submenu_page(
         'storelinkformc',
-        __('CDN & Cache', 'StoreLinkforMC'),
-        __('CDN & Cache', 'StoreLinkforMC'),
+        __('CDN & Cache', 'storelinkformc'),
+        __('CDN & Cache', 'storelinkformc'),
         'manage_options',
         'storelinkformc_cdn_cache',
         'storelinkformc_cdn_cache_page'
@@ -22,18 +22,14 @@ function storelinkformc_cdn_cache_page() {
 
     // Save Cloudflare credentials
     if (isset($_POST['storelinkformc_cf_save']) && check_admin_referer('storelinkformc_cf_settings')) {
-        $zone_raw = isset($_POST['storelinkformc_cf_zone_id']) ? wp_unslash($_POST['storelinkformc_cf_zone_id']) : '';
-        $tok_raw  = isset($_POST['storelinkformc_cf_api_token']) ? wp_unslash($_POST['storelinkformc_cf_api_token']) : '';
-
-        update_option('storelinkformc_cf_zone_id', sanitize_text_field($zone_raw));
-        update_option('storelinkformc_cf_api_token', sanitize_text_field($tok_raw));
-
+        $zone = isset($_POST['storelinkformc_cf_zone_id']) ? sanitize_text_field(wp_unslash($_POST['storelinkformc_cf_zone_id'])) : '';
+        $tok  = isset($_POST['storelinkformc_cf_api_token']) ? sanitize_text_field(wp_unslash($_POST['storelinkformc_cf_api_token'])) : '';
 
         update_option('storelinkformc_cf_zone_id', $zone);
         update_option('storelinkformc_cf_api_token', $tok);
 
         echo '<div class="notice notice-success is-dismissible"><p>' .
-             esc_html__('Cloudflare settings saved.', 'StoreLinkforMC') .
+             esc_html__('Cloudflare settings saved.', 'storelinkformc') .
              '</p></div>';
     }
 
@@ -61,12 +57,12 @@ function storelinkformc_cdn_cache_page() {
 
             } else {
                 echo '<div class="notice notice-success is-dismissible"><p>' .
-                     esc_html__('Cache rule created/updated successfully on Cloudflare.', 'StoreLinkforMC') .
+                     esc_html__('Cache rule created/updated successfully on Cloudflare.', 'storelinkformc') .
                      '</p></div>';
             }
         } else {
             echo '<div class="notice notice-warning is-dismissible"><p>' .
-                 esc_html__('Missing Zone ID or API Token.', 'StoreLinkforMC') .
+                 esc_html__('Missing Zone ID or API Token.', 'storelinkformc') .
                  '</p></div>';
         }
     }
@@ -76,9 +72,9 @@ function storelinkformc_cdn_cache_page() {
 
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('CDN & Cache', 'StoreLinkforMC'); ?></h1>
+        <h1><?php esc_html_e('CDN & Cache', 'storelinkformc'); ?></h1>
         <p>
-            <?php esc_html_e('Configure Cloudflare to bypass cache on StoreLinkforMC REST endpoints.', 'StoreLinkforMC'); ?>
+            <?php esc_html_e('Configure Cloudflare to bypass cache on StoreLinkforMC REST endpoints.', 'storelinkformc'); ?>
         </p>
 
         <form method="post">
@@ -87,7 +83,7 @@ function storelinkformc_cdn_cache_page() {
                 <tr>
                     <th scope="row">
                         <label for="storelinkformc_cf_zone_id">
-                            <?php esc_html_e('Cloudflare Zone ID', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Cloudflare Zone ID', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -96,7 +92,7 @@ function storelinkformc_cdn_cache_page() {
                             id="storelinkformc_cf_zone_id"
                             type="text"
                             class="regular-text"
-                            value="<?php echo $zone; ?>"
+                            value="<?php echo esc_attr($zone); ?>"
                             required
                         >
                     </td>
@@ -104,7 +100,7 @@ function storelinkformc_cdn_cache_page() {
                 <tr>
                     <th scope="row">
                         <label for="storelinkformc_cf_api_token">
-                            <?php esc_html_e('Cloudflare API Token', 'StoreLinkforMC'); ?>
+                            <?php esc_html_e('Cloudflare API Token', 'storelinkformc'); ?>
                         </label>
                     </th>
                     <td>
@@ -113,7 +109,7 @@ function storelinkformc_cdn_cache_page() {
                             id="storelinkformc_cf_api_token"
                             type="password"
                             class="regular-text"
-                            value="<?php echo $tok; ?>"
+                            value="<?php echo esc_attr($tok); ?>"
                             required
                         >
                     </td>
@@ -122,21 +118,21 @@ function storelinkformc_cdn_cache_page() {
 
             <p class="submit">
                 <button type="submit" name="storelinkformc_cf_save" class="button button-primary">
-                    <?php esc_html_e('Save', 'StoreLinkforMC'); ?>
+                    <?php esc_html_e('Save', 'storelinkformc'); ?>
                 </button>
                 <button type="submit" name="storelinkformc_cf_apply" class="button">
-                    <?php esc_html_e('Create/Update Cache Rule on Cloudflare', 'StoreLinkforMC'); ?>
+                    <?php esc_html_e('Create/Update Cache Rule on Cloudflare', 'storelinkformc'); ?>
                 </button>
             </p>
 
-            <h2><?php esc_html_e('What does this rule do?', 'StoreLinkforMC'); ?></h2>
-            <p><?php esc_html_e('It bypasses cache for:', 'StoreLinkforMC'); ?></p>
+            <h2><?php esc_html_e('What does this rule do?', 'storelinkformc'); ?></h2>
+            <p><?php esc_html_e('It bypasses cache for:', 'storelinkformc'); ?></p>
             <ul style="list-style: disc; padding-left: 20px;">
                 <li><code>/wp-json/storelinkformc/...</code></li>
                 <li><code>?rest_route=/storelinkformc/...</code></li>
             </ul>
             <p>
-                <?php esc_html_e('If you use “Cache Everything”, this rule is essential.', 'StoreLinkforMC'); ?>
+                <?php esc_html_e('If you use “Cache Everything”, this rule is essential.', 'storelinkformc'); ?>
             </p>
         </form>
     </div>

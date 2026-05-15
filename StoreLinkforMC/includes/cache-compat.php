@@ -15,27 +15,31 @@ if (!defined('ABSPATH')) {
 add_action('init', function () {
     $uri = '';
     if (isset($_SERVER['REQUEST_URI'])) {
-        $uri = wp_unslash((string) $_SERVER['REQUEST_URI']);
+        $uri = sanitize_text_field(wp_unslash((string) $_SERVER['REQUEST_URI']));
     }
 
     $is_storelink_endpoint = false;
 
     if ($uri !== '') {
         // Pretty permalinks: /wp-json/storelinkformc/v1/...
-        if (str_starts_with($uri, '/wp-json/storelinkformc/v1/')) {
+        if (strpos($uri, '/wp-json/storelinkformc/v1/') === 0) {
             $is_storelink_endpoint = true;
         }
 
         // Fallback REST (?rest_route=) or manual trigger with ?storelinkformc=1
         if (!$is_storelink_endpoint) {
             $q = [];
-            if (!empty($_GET) && is_array($_GET)) {
-                $q = wp_unslash($_GET);
+            $query = wp_parse_url($uri, PHP_URL_QUERY);
+            if (is_string($query) && '' !== $query) {
+                wp_parse_str($query, $q);
+                $q = array_map('sanitize_text_field', $q);
             }
 
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
             if (!empty($q['storelinkformc'])) {
                 $is_storelink_endpoint = true;
-            } elseif (!empty($q['rest_route']) && str_starts_with((string) $q['rest_route'], '/storelinkformc/')) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            } elseif (!empty($q['rest_route']) && strpos((string) $q['rest_route'], '/storelinkformc/') === 0) {
                 $is_storelink_endpoint = true;
             }
         }
@@ -47,21 +51,27 @@ add_action('init', function () {
 
     // Signals respected by most cache/CDN plugins
     if (!defined('DONOTCACHE_PAGE')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTCACHE_PAGE', true);
     }
     if (!defined('DONOTCACHE_OBJECT')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTCACHE_OBJECT', true);
     }
     if (!defined('DONOTMINIFY')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTMINIFY', true);
     }
     if (!defined('DONOTCDN')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTCDN', true);
     }
     if (!defined('DONOTROCKETCACHE')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTROCKETCACHE', true);
     }
     if (!defined('DONOTROCKETOPTIMIZE')) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
         define('DONOTROCKETOPTIMIZE', true);
     }
 
@@ -84,7 +94,7 @@ add_action('init', function () {
 add_filter('rest_pre_serve_request', function ($served, $result, $request, $server) {
     $route = method_exists($request, 'get_route') ? $request->get_route() : '';
 
-    if (is_string($route) && str_starts_with($route, '/storelinkformc/v1/')) {
+    if (is_string($route) && strpos($route, '/storelinkformc/v1/') === 0) {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true);
         header('X-LiteSpeed-Cache-Control: no-cache', true);
         header('X-Accel-Expires: 0', true);
@@ -138,6 +148,7 @@ if (!function_exists('storelinkformc_purge_all_caches_soft')) {
     function storelinkformc_purge_all_caches_soft(): void {
         // LiteSpeed
         if (function_exists('do_action')) {
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
             do_action('litespeed_purge_all');
         }
         // SG Optimizer
@@ -154,6 +165,7 @@ if (!function_exists('storelinkformc_purge_all_caches_soft')) {
 if (!function_exists('storelinkformc_purge_url_soft')) {
     function storelinkformc_purge_url_soft(string $url): void {
         if (function_exists('do_action')) {
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
             do_action('litespeed_purge_url', $url);
         }
         if (function_exists('rocket_clean_files')) {

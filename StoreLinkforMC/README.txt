@@ -5,7 +5,7 @@ Tags: minecraft, woocommerce, delivery, game, shop
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.0.32
+Stable tag: 1.0.35
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -63,9 +63,30 @@ The **Settings** page provides:
 
 == Changelog ==
 
-= Version 1.0.32 =
+= Version 1.0.35 =
 
-Tested for WordPress Version 6.9
+- Added WooCommerce product variation support, allowing synced deliveries and role mappings to target specific variations instead of requiring separate products.
+- Added product and variation identifiers to pending deliveries so the Minecraft plugin can keep compatibility while receiving more precise delivery data.
+- Added unclaimed delivery expiration settings, with a default of 30 days for products that have not been claimed.
+- Added automatic expiration tracking for unclaimed pending deliveries through `expires_at` and `expired` database fields.
+- Added database self-healing and update routines to create or update required delivery columns without requiring a full reinstall.
+- Added safer admin handling for delivery management actions, product selection, role mapping, checkout fields, CDN/cache settings, and email templates.
+- Added Cloudflare CDN/cache compatibility improvements for StoreLinkforMC REST endpoints.
+- Fixed fatal errors caused by duplicate plugin loading by adding a defensive plugin load guard.
+- Fixed fatal errors when WooCommerce functions such as `is_checkout()` or `wc_get_order()` are unavailable.
+- Fixed the SMTP admin notice include path so the correct admin notice file is loaded.
+- Fixed undefined Cloudflare settings variables before saving Zone ID and API Token values.
+- Fixed PHP compatibility by allowing nullable array request bodies in the Cloudflare API helper.
+- Fixed Mojang username checks to handle `WP_Error` responses from failed remote requests.
+- Fixed duplicated AJAX unlink handlers by keeping a single account unlink handler.
+- Fixed text-domain formatting and translation domain usage to comply with WordPress Plugin Check requirements.
+- Fixed unsafe or noisy Plugin Check warnings around sanitized `$_GET` and `$_POST` handling.
+- Fixed direct database query warnings where the plugin needs to work with its custom pending deliveries table.
+- Fixed delivery completion logic so WooCommerce order status updates remain guarded and compatible.
+- Fixed legacy short expiration values so old 10-second settings are corrected back to the 30-day default.
+- Removed the duplicate account unlink AJAX block from the main plugin file.
+- Removed outdated unsafe input handling patterns that caused WordPress Plugin Check warnings.
+- Removed the invalid uppercase text-domain value from the plugin header and translation calls.
 
 
 == License ==
