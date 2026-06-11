@@ -59,36 +59,109 @@ function storelinkformc_checkout_fields_page() {
         'shipping_country'     => __('Shipping Country', 'storelinkformc'),
         'shipping_state'       => __('Shipping State/Province', 'storelinkformc'),
     ];
+    $field_groups = [
+        __('Minecraft', 'storelinkformc') => [
+            'minecraft_username',
+            'minecraft_gift',
+        ],
+        __('Billing', 'storelinkformc') => [
+            'billing_first_name',
+            'billing_last_name',
+            'billing_email',
+            'billing_address_1',
+            'billing_city',
+            'billing_postcode',
+            'billing_country',
+            'billing_state',
+        ],
+        __('Shipping', 'storelinkformc') => [
+            'shipping_first_name',
+            'shipping_last_name',
+            'shipping_address_1',
+            'shipping_city',
+            'shipping_postcode',
+            'shipping_country',
+            'shipping_state',
+        ],
+    ];
+    $field_notes = [
+        'minecraft_username'   => __('Shows the linked player or recipient username field.', 'storelinkformc'),
+        'minecraft_gift'       => __('Lets customers buy for another Minecraft player.', 'storelinkformc'),
+        'billing_first_name'   => __('Customer billing first name.', 'storelinkformc'),
+        'billing_last_name'    => __('Customer billing last name.', 'storelinkformc'),
+        'billing_email'        => __('Customer email used by WooCommerce.', 'storelinkformc'),
+        'billing_address_1'    => __('Primary billing street address.', 'storelinkformc'),
+        'billing_city'         => __('Billing city field.', 'storelinkformc'),
+        'billing_postcode'     => __('Billing postal or ZIP code.', 'storelinkformc'),
+        'billing_country'      => __('Billing country selector.', 'storelinkformc'),
+        'billing_state'        => __('Billing state or province selector.', 'storelinkformc'),
+        'shipping_first_name'  => __('Shipping recipient first name.', 'storelinkformc'),
+        'shipping_last_name'   => __('Shipping recipient last name.', 'storelinkformc'),
+        'shipping_address_1'   => __('Primary shipping street address.', 'storelinkformc'),
+        'shipping_city'        => __('Shipping city field.', 'storelinkformc'),
+        'shipping_postcode'    => __('Shipping postal or ZIP code.', 'storelinkformc'),
+        'shipping_country'     => __('Shipping country selector.', 'storelinkformc'),
+        'shipping_state'       => __('Shipping state or province selector.', 'storelinkformc'),
+    ];
+    $selected_count = is_array($selected_fields) ? count($selected_fields) : 0;
 
     ?>
-    <div class="wrap">
-        <h1><?php esc_html_e('Checkout Field Settings', 'storelinkformc'); ?></h1>
+    <div class="wrap storelinkformc-admin">
+        <div class="storelinkformc-admin-header">
+            <div>
+                <h1><?php esc_html_e('Checkout Fields', 'storelinkformc'); ?></h1>
+                <p class="storelinkformc-admin-subtitle">
+                    <?php esc_html_e('Choose which fields StoreLink should keep visible during checkout when the cart contains synced Minecraft products.', 'storelinkformc'); ?>
+                </p>
+            </div>
+            <div class="storelinkformc-admin-stats" aria-hidden="true">
+                <div class="storelinkformc-stat">
+                    <strong><?php echo esc_html((string) $selected_count); ?></strong>
+                    <span><?php esc_html_e('selected', 'storelinkformc'); ?></span>
+                </div>
+                <div class="storelinkformc-stat">
+                    <strong><?php echo esc_html((string) count($all_fields)); ?></strong>
+                    <span><?php esc_html_e('available', 'storelinkformc'); ?></span>
+                </div>
+            </div>
+        </div>
+
         <form method="post">
             <?php wp_nonce_field('storelinkformc_save_checkout_fields', 'storelinkformc_checkout_fields_nonce'); ?>
 
-            <table class="form-table">
-                <tr>
-                    <th><?php esc_html_e('Fields to ask during checkout:', 'storelinkformc'); ?></th>
-                </tr>
-                <?php foreach ($all_fields as $key => $label) : ?>
-                    <tr>
-                        <th scope="row"><?php echo esc_html($label); ?></th>
-                        <td>
-                            <input
-                                type="checkbox"
-                                name="checkout_fields[]"
-                                value="<?php echo esc_attr($key); ?>"
-                                <?php checked(in_array($key, $selected_fields, true)); ?>
-                            >
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </table>
-
-            <p class="description">
-                <?php esc_html_e('Only the selected fields will be shown during WooCommerce checkout.', 'storelinkformc'); ?>
-            </p>
-            <?php submit_button(__('Save Settings', 'storelinkformc')); ?>
+            <div class="storelinkformc-panel">
+                <div class="storelinkformc-panel-header">
+                    <div>
+                        <h2><?php esc_html_e('Fields to ask during checkout', 'storelinkformc'); ?></h2>
+                        <p><?php esc_html_e('Unchecked fields are hidden for StoreLink synced carts. Leave empty to use WooCommerce defaults.', 'storelinkformc'); ?></p>
+                    </div>
+                </div>
+                <div class="storelinkformc-panel-body">
+                    <?php foreach ($field_groups as $group_label => $group_fields) : ?>
+                        <div class="storelinkformc-section-title"><?php echo esc_html($group_label); ?></div>
+                        <div class="storelinkformc-grid">
+                            <?php foreach ($group_fields as $key) : ?>
+                                <?php if (!isset($all_fields[$key])) continue; ?>
+                                <label class="storelinkformc-field-card">
+                                    <input
+                                        type="checkbox"
+                                        name="checkout_fields[]"
+                                        value="<?php echo esc_attr($key); ?>"
+                                        <?php checked(in_array($key, $selected_fields, true)); ?>
+                                    >
+                                    <span>
+                                        <strong><?php echo esc_html($all_fields[$key]); ?></strong>
+                                        <span><?php echo esc_html($field_notes[$key] ?? ''); ?></span>
+                                    </span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="storelinkformc-actions">
+                    <?php submit_button(__('Save Settings', 'storelinkformc'), 'primary', 'submit', false); ?>
+                </div>
+            </div>
         </form>
     </div>
     <?php
@@ -204,6 +277,13 @@ add_action('admin_enqueue_scripts', function ($hook) {
     if ($hook !== 'storelinkformc_page_storelinkformc_checkout_fields') {
         return;
     }
+
+    wp_enqueue_style(
+        'storelinkformc-admin-pages',
+        plugins_url('../assets/css/admin-pages.css', __FILE__),
+        [],
+        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
+    );
 
     wp_register_script(
         'storelinkformc-checkout',

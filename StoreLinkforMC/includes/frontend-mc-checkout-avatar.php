@@ -30,6 +30,8 @@ add_action('wp_footer', function () {
     <style>
     #billing_minecraft_username,
     #minecraft_username,
+    #storelinkformc\/minecraft_username,
+    #storelinkformc-minecraft_username,
     input[name="billing[minecraft_username]"] {
         background-image: url('<?php echo esc_url($default_avatar); ?>') !important;
         background-repeat: no-repeat !important;
@@ -45,6 +47,9 @@ add_action('wp_footer', function () {
         const usernameInput =
             document.getElementById('billing_minecraft_username') ||
             document.getElementById('minecraft_username') ||
+            document.getElementById('storelinkformc/minecraft_username') ||
+            document.getElementById('storelinkformc-minecraft_username') ||
+            document.querySelector('input[name="storelinkformc/minecraft_username"]') ||
             document.querySelector('input[name="billing[minecraft_username]"]');
 
         if (!usernameInput) {
@@ -54,6 +59,9 @@ add_action('wp_footer', function () {
         // localizar checkbox de regalo
         let giftCheckbox =
             document.querySelector('#storelinkformc_is_gift') ||
+            document.querySelector('#storelinkformc\\/minecraft_gift') ||
+            document.querySelector('#storelinkformc-minecraft_gift') ||
+            document.querySelector('input[name="storelinkformc/minecraft_gift"]') ||
             document.querySelector('input[name="storelinkformc_is_gift"]') ||
             document.querySelector('input[name="this_is_a_gift"]') ||
             document.querySelector('input[id*="gift"]') ||

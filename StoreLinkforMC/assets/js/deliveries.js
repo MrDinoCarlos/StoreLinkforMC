@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', function () {
+    const selectAll = document.querySelector('#storelinkformc-select-all-deliveries');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.storelinkformc-delivery-checkbox'));
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+            });
+        });
+    }
+
     // Confirmación al eliminar todo
     const deleteAllButton = document.querySelector('input[name="clear_all_deliveries"]');
     if (deleteAllButton) {
@@ -22,7 +33,30 @@ document.addEventListener('DOMContentLoaded', function () {
     // Confirmación al borrar individual
     document.querySelectorAll('button[name="delete_delivery"]').forEach(button => {
         button.addEventListener('click', function (e) {
-            if (!confirm('Delete this delivery?')) {
+            if (!confirm('This will delete the delivery record and its WooCommerce order. Continue?')) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    document.querySelectorAll('button[name="apply_bulk_action"]').forEach(button => {
+        button.addEventListener('click', function (e) {
+            const selected = rowCheckboxes.filter(checkbox => checkbox.checked);
+            const action = document.querySelector('select[name="bulk_action"]');
+
+            if (!action || !action.value) {
+                alert('Choose a bulk action first.');
+                e.preventDefault();
+                return;
+            }
+
+            if (!selected.length) {
+                alert('Select at least one delivery first.');
+                e.preventDefault();
+                return;
+            }
+
+            if (action.value === 'delete' && !confirm('This will delete the selected deliveries and their WooCommerce orders. Continue?')) {
                 e.preventDefault();
             }
         });

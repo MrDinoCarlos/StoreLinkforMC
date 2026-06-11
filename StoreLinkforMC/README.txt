@@ -3,9 +3,9 @@ Contributors: mrdinocarlos
 Donate link: https://buymeacoffee.com/mrdino
 Tags: minecraft, woocommerce, delivery, game, shop
 Requires at least: 6.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 1.0.35
+Stable tag: 1.0.36
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,6 +62,24 @@ The **Settings** page provides:
 
 
 == Changelog ==
+
+= Version 1.0.36 =
+
+- Added WooCommerce Checkout Blocks compatibility for synced Minecraft carts while preserving the normal WooCommerce checkout for non-synced products.
+- Added automatic fallback to the classic WooCommerce checkout when synced products are purchased from a Checkout Blocks page, keeping StoreLink checkout behavior reliable.
+- Added Minecraft username and gift checkout handling for block-based checkout pages, including linked-player display and Minecraft head preview support.
+- Added improved checkout field visibility rules so reduced checkout fields only apply to carts containing synced StoreLink products.
+- Added redesigned admin pages for Checkout Fields, Products, Sync Roles, and Pending Deliveries with cleaner panels, counters, tables, and responsive layouts.
+- Added bulk actions to Pending Deliveries so multiple deliveries can be selected and marked delivered, marked undelivered, restored from expired, or deleted together.
+- Added select-all delivery checkboxes and safer confirmation prompts for destructive delivery actions.
+- Added automatic WooCommerce order completion checks after bulk delivery updates, matching the existing single-delivery workflow.
+- Added clearer delivery status badges for pending, delivered, and expired delivery records.
+- Fixed Checkout Blocks order submission issues caused by WooCommerce Blocks internal validation when custom reduced fields were shown for synced products.
+- Fixed the Minecraft gift checkout flow so a valid recipient username can be entered and the linked username can also be used as a gift recipient.
+- Fixed Minecraft avatar display in Checkout Blocks so the player head does not repeat as a background and no longer overlaps the username label.
+- Fixed checkout field settings being applied too broadly by ensuring non-synced products keep the default WooCommerce checkout fields.
+- Fixed classic checkout field registration so disabled StoreLink checkout fields are not reinserted after the settings filter runs.
+- Improved admin usability for product selection, role mapping, checkout field selection, and delivery queue management.
 
 = Version 1.0.35 =
 

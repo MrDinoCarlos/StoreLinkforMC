@@ -62,67 +62,119 @@ function storelinkformc_products_page() {
         'orderby' => 'name',
         'order'  => 'ASC',
     ]);
+    $variation_count = 0;
+    foreach ($products as $product) {
+        if ($product->is_type('variable')) {
+            $variation_count += count($product->get_children());
+        }
+    }
     ?>
 
-    <div class="wrap">
-        <h1><?php esc_html_e('Synced Products', 'storelinkformc'); ?></h1>
+    <div class="wrap storelinkformc-admin">
+        <div class="storelinkformc-admin-header">
+            <div>
+                <h1><?php esc_html_e('Products', 'storelinkformc'); ?></h1>
+                <p class="storelinkformc-admin-subtitle">
+                    <?php esc_html_e('Select the WooCommerce products and variations that should trigger Minecraft delivery and role sync logic.', 'storelinkformc'); ?>
+                </p>
+            </div>
+            <div class="storelinkformc-admin-stats" aria-hidden="true">
+                <div class="storelinkformc-stat">
+                    <strong><?php echo esc_html((string) count($selected)); ?></strong>
+                    <span><?php esc_html_e('selected', 'storelinkformc'); ?></span>
+                </div>
+                <div class="storelinkformc-stat">
+                    <strong><?php echo esc_html((string) count($products)); ?></strong>
+                    <span><?php esc_html_e('products', 'storelinkformc'); ?></span>
+                </div>
+                <div class="storelinkformc-stat">
+                    <strong><?php echo esc_html((string) $variation_count); ?></strong>
+                    <span><?php esc_html_e('variations', 'storelinkformc'); ?></span>
+                </div>
+            </div>
+        </div>
 
         <form method="post">
             <?php wp_nonce_field('storelinkformc_products_save'); ?>
 
-            <table class="widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th style="width: 60px;"><?php esc_html_e('Select', 'storelinkformc'); ?></th>
-                        <th><?php esc_html_e('Product Name', 'storelinkformc'); ?></th>
-                        <th style="width: 110px;"><?php esc_html_e('Woo ID', 'storelinkformc'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($products as $product) : ?>
-                        <tr>
-                            <td>
-                                <input type="checkbox"
-                                    name="storelinkformc_selected_products[]"
-                                    value="<?php echo esc_attr($product->get_id()); ?>"
-                                    <?php checked(in_array($product->get_id(), $selected, true)); ?>>
-                            </td>
-                            <td><strong><?php echo esc_html($product->get_name()); ?></strong></td>
-                            <td><?php echo esc_html((string) $product->get_id()); ?></td>
-                        </tr>
-                        <?php if ($product->is_type('variable')) : ?>
-                            <?php foreach ($product->get_children() as $variation_id) : ?>
-                                <?php
-                                $variation = wc_get_product($variation_id);
-                                if (!$variation || !$variation->exists()) {
-                                    continue;
-                                }
-                                $variation_label = wc_get_formatted_variation($variation, true, false, true);
-                                if ($variation_label) {
-                                    $variation_label = sprintf('%s - %s', $product->get_name(), $variation_label);
-                                } else {
-                                    $variation_label = $variation->get_name();
-                                }
-                                ?>
+            <div class="storelinkformc-panel">
+                <div class="storelinkformc-panel-header">
+                    <div>
+                        <h2><?php esc_html_e('Synced catalog items', 'storelinkformc'); ?></h2>
+                        <p><?php esc_html_e('Select parent products, specific variations, or both depending on how your store sells Minecraft rewards.', 'storelinkformc'); ?></p>
+                    </div>
+                </div>
+
+                <?php if (empty($products)) : ?>
+                    <div class="storelinkformc-panel-body">
+                        <div class="storelinkformc-empty">
+                            <?php esc_html_e('No WooCommerce products were found.', 'storelinkformc'); ?>
+                        </div>
+                    </div>
+                <?php else : ?>
+                    <table class="widefat fixed striped storelinkformc-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 74px;"><?php esc_html_e('Sync', 'storelinkformc'); ?></th>
+                                <th><?php esc_html_e('Product', 'storelinkformc'); ?></th>
+                                <th style="width: 120px;"><?php esc_html_e('Woo ID', 'storelinkformc'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($products as $product) : ?>
                                 <tr>
-                                    <td style="padding-left: 30px;">
+                                    <td>
                                         <input type="checkbox"
                                             name="storelinkformc_selected_products[]"
-                                            value="<?php echo esc_attr($variation->get_id()); ?>"
-                                            <?php checked(in_array($variation->get_id(), $selected, true)); ?>>
+                                            value="<?php echo esc_attr($product->get_id()); ?>"
+                                            <?php checked(in_array($product->get_id(), $selected, true)); ?>>
                                     </td>
-                                    <td style="padding-left: 30px; color: #646970;">
-                                        <?php echo esc_html($variation_label); ?>
+                                    <td>
+                                        <span class="storelinkformc-product-name">
+                                            <strong><?php echo esc_html($product->get_name()); ?></strong>
+                                            <span class="storelinkformc-muted"><?php echo esc_html(wc_get_product_types()[$product->get_type()] ?? $product->get_type()); ?></span>
+                                        </span>
                                     </td>
-                                    <td><?php echo esc_html((string) $variation->get_id()); ?></td>
+                                    <td><span class="storelinkformc-id-pill"><?php echo esc_html((string) $product->get_id()); ?></span></td>
                                 </tr>
+                                <?php if ($product->is_type('variable')) : ?>
+                                    <?php foreach ($product->get_children() as $variation_id) : ?>
+                                        <?php
+                                        $variation = wc_get_product($variation_id);
+                                        if (!$variation || !$variation->exists()) {
+                                            continue;
+                                        }
+                                        $variation_label = wc_get_formatted_variation($variation, true, false, true);
+                                        if (!$variation_label) {
+                                            $variation_label = $variation->get_name();
+                                        }
+                                        ?>
+                                        <tr class="storelinkformc-variation">
+                                            <td>
+                                                <input type="checkbox"
+                                                    name="storelinkformc_selected_products[]"
+                                                    value="<?php echo esc_attr($variation->get_id()); ?>"
+                                                    <?php checked(in_array($variation->get_id(), $selected, true)); ?>>
+                                            </td>
+                                            <td>
+                                                <span class="storelinkformc-product-name">
+                                                    <strong><?php echo esc_html($variation_label); ?></strong>
+                                                    <span class="storelinkformc-muted"><?php echo esc_html($product->get_name()); ?></span>
+                                                </span>
+                                            </td>
+                                            <td><span class="storelinkformc-id-pill"><?php echo esc_html((string) $variation->get_id()); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
 
-            <?php submit_button(__('Save Selection', 'storelinkformc')); ?>
+                <div class="storelinkformc-actions">
+                    <?php submit_button(__('Save Selection', 'storelinkformc'), 'primary', 'submit', false); ?>
+                </div>
+            </div>
         </form>
     </div>
     <?php
@@ -135,6 +187,13 @@ add_action('admin_enqueue_scripts', function ($hook) {
     if ($hook !== 'storelinkformc_page_storelinkformc_products') {
         return;
     }
+
+    wp_enqueue_style(
+        'storelinkformc-admin-pages',
+        plugins_url('../assets/css/admin-pages.css', __FILE__),
+        [],
+        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
+    );
 
     wp_register_script(
         'storelinkformc-products',

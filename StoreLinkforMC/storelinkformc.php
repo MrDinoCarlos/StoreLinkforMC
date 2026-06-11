@@ -3,7 +3,7 @@
 Plugin Name: StoreLink for Minecraft by MrDino
 Plugin URI: https://mrdino.es/woostorelink-plugin/
 Description: Connects WooCommerce to Minecraft to deliver items after purchase.
-Version: 1.0.35
+Version: 1.0.36
 Requires PHP: 8.1
 Requires at least: 6.0
 Author: MrDinoCarlos
@@ -31,6 +31,7 @@ require_once plugin_dir_path(__FILE__) . 'admin/sync-roles-page.php';
 require_once plugin_dir_path(__FILE__) . 'admin/email-templates-page.php';
 require_once plugin_dir_path(__FILE__) . 'linking-api.php';
 require_once plugin_dir_path(__FILE__) . 'includes/frontend-mc-order-fields.php';
+require_once plugin_dir_path(__FILE__) . 'includes/blocks-checkout-compat.php';
 require_once plugin_dir_path(__FILE__) . 'includes/cache-compat.php';
 require_once plugin_dir_path(__FILE__) . 'includes/cloudflare-api.php';
 require_once plugin_dir_path(__FILE__) . 'admin/cdn-cache-page.php';
@@ -182,8 +183,6 @@ add_action('admin_init', function () {
         storelinkformc_create_or_update_tables();
         update_option('storelinkformc_db_version', '1.0.35');
     }
-
-    storelinkformc_force_classic_checkout(true);
 
     if (!wp_next_scheduled('storelinkformc_cleanup_expired_deliveries')) {
         wp_schedule_event(time() + 300, 'hourly', 'storelinkformc_cleanup_expired_deliveries');
@@ -365,10 +364,11 @@ function storelinkformc_force_classic_checkout($force = false) {
 }
 
 
-// ⚠️ Aviso si el checkout usa bloques (no compatible) — oculto si ya hay shortcode
+// Aviso solo si el sitio usa bloques pero WooCommerce no expone la API necesaria.
 add_action('admin_notices', 'storelinkformc_checkout_blocks_notice');
 function storelinkformc_checkout_blocks_notice() {
     if ( ! current_user_can('manage_options') ) return;
+    if ( function_exists('woocommerce_register_additional_checkout_field') ) return;
 
     // ¿ya lo cerró este usuario?
     if ( get_user_meta(get_current_user_id(), 'storelinkformc_dismiss_checkout_blocks_notice', true) ) return;
@@ -400,8 +400,8 @@ function storelinkformc_checkout_blocks_notice() {
     );
 
     echo '<div class="notice notice-warning is-dismissible storelinkformc-dismissable" data-nonce="' . esc_attr($nonce) . '">
-        <p>⚠️ <strong>StoreLink for MC:</strong> The new WooCommerce block-based checkout is not compatible with this plugin.
-        Please edit the Checkout page and replace it with the <code>[woocommerce_checkout]</code> shortcode.
+        <p><strong>StoreLink for MC:</strong> This WooCommerce version does not expose the Checkout Blocks additional fields API needed by StoreLink.
+        Please update WooCommerce or replace the Checkout page with the <code>[woocommerce_checkout]</code> shortcode.
         <a href="' . esc_url($url_force) . '" class="button button-secondary" style="margin-left:8px;">Force Now</a></p>
     </div>';
 }

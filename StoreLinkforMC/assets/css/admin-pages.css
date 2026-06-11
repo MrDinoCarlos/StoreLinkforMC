@@ -1,0 +1,355 @@
+.storelinkformc-admin {
+    max-width: 1180px;
+}
+
+.storelinkformc-admin *,
+.storelinkformc-admin *::before,
+.storelinkformc-admin *::after {
+    box-sizing: border-box;
+}
+
+.storelinkformc-admin-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    align-items: flex-start;
+    margin: 20px 0 18px;
+}
+
+.storelinkformc-admin-header h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    line-height: 1.25;
+    font-weight: 650;
+}
+
+.storelinkformc-admin-subtitle {
+    max-width: 720px;
+    margin: 0;
+    color: #50575e;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.storelinkformc-admin-stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.storelinkformc-stat {
+    min-width: 116px;
+    padding: 12px 14px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+
+.storelinkformc-stat strong {
+    display: block;
+    color: #1d2327;
+    font-size: 22px;
+    line-height: 1.1;
+}
+
+.storelinkformc-stat span {
+    display: block;
+    margin-top: 4px;
+    color: #646970;
+    font-size: 12px;
+}
+
+.storelinkformc-panel {
+    margin: 0 0 18px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}
+
+.storelinkformc-panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    padding: 16px 18px;
+    border-bottom: 1px solid #dcdcde;
+    background: #f6f7f7;
+}
+
+.storelinkformc-panel-header h2 {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+}
+
+.storelinkformc-panel-header p {
+    margin: 4px 0 0;
+    color: #646970;
+}
+
+.storelinkformc-panel-body {
+    padding: 18px;
+}
+
+.storelinkformc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.storelinkformc-field-card {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    min-height: 74px;
+    padding: 14px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.storelinkformc-field-card:hover {
+    border-color: #8c8f94;
+}
+
+.storelinkformc-field-card input[type="checkbox"] {
+    margin-top: 2px;
+}
+
+.storelinkformc-field-card strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #1d2327;
+}
+
+.storelinkformc-field-card span {
+    display: block;
+    color: #646970;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.storelinkformc-section-title {
+    margin: 22px 0 10px;
+    color: #1d2327;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.storelinkformc-actions {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid #dcdcde;
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.storelinkformc-table {
+    border: 0;
+    box-shadow: none;
+}
+
+.storelinkformc-table th {
+    color: #50575e;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.storelinkformc-table td,
+.storelinkformc-table th {
+    padding: 13px 14px;
+    vertical-align: middle;
+}
+
+.storelinkformc-product-name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.storelinkformc-product-name strong {
+    color: #1d2327;
+}
+
+.storelinkformc-muted {
+    color: #646970;
+    font-size: 12px;
+}
+
+.storelinkformc-variation td {
+    background: #fbfbfc;
+}
+
+.storelinkformc-variation .storelinkformc-product-name {
+    padding-left: 22px;
+    border-left: 3px solid #dcdcde;
+}
+
+.storelinkformc-id-pill {
+    display: inline-flex;
+    min-width: 54px;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #f0f0f1;
+    color: #50575e;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12px;
+}
+
+.storelinkformc-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+}
+
+.storelinkformc-control-card {
+    padding: 16px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.storelinkformc-control-card h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+}
+
+.storelinkformc-control-card label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.storelinkformc-control-card input[type="text"],
+.storelinkformc-control-card select,
+.storelinkformc-role-select {
+    width: 100%;
+    max-width: 360px;
+}
+
+.storelinkformc-empty {
+    padding: 22px;
+    border: 1px dashed #c3c4c7;
+    border-radius: 8px;
+    background: #fbfbfc;
+    color: #646970;
+    text-align: center;
+}
+
+.storelinkformc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    padding: 16px 18px;
+    border-bottom: 1px solid #dcdcde;
+    background: #fff;
+}
+
+.storelinkformc-toolbar label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    color: #50575e;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.storelinkformc-toolbar input[type="text"],
+.storelinkformc-toolbar select {
+    min-width: 170px;
+}
+
+.storelinkformc-bulkbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid #dcdcde;
+    background: #fbfbfc;
+}
+
+.storelinkformc-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.storelinkformc-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.storelinkformc-status-delivered {
+    background: #edfaef;
+    color: #008a20;
+}
+
+.storelinkformc-status-pending {
+    background: #fcf0f1;
+    color: #b32d2e;
+}
+
+.storelinkformc-status-expired {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+.storelinkformc-danger-zone {
+    margin-top: 16px;
+    border-color: #f0b9b8;
+}
+
+.storelinkformc-danger-zone .storelinkformc-panel-header {
+    background: #fcf0f1;
+    border-bottom-color: #f0b9b8;
+}
+
+.storelinkformc-check-column {
+    width: 46px;
+}
+
+.storelinkformc-actions-column {
+    width: 360px;
+}
+
+@media (max-width: 782px) {
+    .storelinkformc-admin-header {
+        display: block;
+    }
+
+    .storelinkformc-admin-stats {
+        justify-content: flex-start;
+        margin-top: 14px;
+    }
+
+    .storelinkformc-panel-header {
+        display: block;
+    }
+
+    .storelinkformc-actions {
+        justify-content: stretch;
+    }
+
+    .storelinkformc-actions .button {
+        width: 100%;
+        text-align: center;
+    }
+}

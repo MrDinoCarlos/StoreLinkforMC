@@ -15,19 +15,24 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
     $user_id = get_current_user_id();
     $linked  = $user_id ? sanitize_text_field(get_user_meta($user_id, 'minecraft_player', true)) : '';
     $force   = function_exists('storelinkformc_force_link_enabled') ? storelinkformc_force_link_enabled() : true;
+    $show_username = storelinkformc_checkout_field_enabled('minecraft_username');
+    $show_gift     = storelinkformc_checkout_field_enabled('minecraft_gift');
 
-    // Campo de username siempre presente
-    $fields['billing']['minecraft_username'] = [
-        'type'              => 'text',
-        'label'             => __('Minecraft Username', 'storelinkformc'),
-        'required'          => $force ? false : true, // si NO se fuerza vincular, este campo es obligatorio
-        'class'             => ['form-row-wide'],
-        'priority'          => 210,
-        'placeholder'       => __('e.g. Notch', 'storelinkformc'),
-        'custom_attributes' => [],
-    ];
+    if ($show_username) {
+        $fields['billing']['minecraft_username'] = [
+            'type'              => 'text',
+            'label'             => __('Minecraft Username', 'storelinkformc'),
+            'required'          => $force ? false : true, // si NO se fuerza vincular, este campo es obligatorio
+            'class'             => ['form-row-wide'],
+            'priority'          => 210,
+            'placeholder'       => __('e.g. Notch', 'storelinkformc'),
+            'custom_attributes' => [],
+        ];
+    } elseif (isset($fields['billing']['minecraft_username'])) {
+        unset($fields['billing']['minecraft_username']);
+    }
 
-    if ($force) {
+    if ($force && $show_gift) {
         // MODO CLÁSICO: mostrar checkbox de regalo
         $fields['billing']['minecraft_gift'] = [
             'type'     => 'checkbox',
@@ -38,7 +43,6 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
         ];
         // Si el usuario tiene vinculado, el JS lo pondrá readonly cuando no sea regalo
     } else {
-        // MODO LIBRE: NO mostrar el checkbox de regalo
         if (isset($fields['billing']['minecraft_gift'])) {
             unset($fields['billing']['minecraft_gift']);
         }
@@ -53,6 +57,10 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
  */
 add_action('woocommerce_after_checkout_billing_form', function () {
     if (!function_exists('storelinkformc_cart_has_synced_products') || !storelinkformc_cart_has_synced_products()) {
+        return;
+    }
+
+    if (!storelinkformc_checkout_field_enabled('minecraft_username')) {
         return;
     }
 
@@ -77,13 +85,15 @@ add_action('woocommerce_checkout_process', function () {
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $mc_user = isset($_POST['minecraft_username']) ? sanitize_text_field(wp_unslash($_POST['minecraft_username'])) : '';
     $force   = function_exists('storelinkformc_force_link_enabled') ? storelinkformc_force_link_enabled() : true;
+    $has_username_field = storelinkformc_checkout_field_enabled('minecraft_username');
+    $has_gift_field     = storelinkformc_checkout_field_enabled('minecraft_gift');
 
     // Política (premium / any)
     $policy = get_option('storelinkformc_username_policy', 'premium'); // 'premium' | 'any'
 
     if ($force) {
         // MODO CLÁSICO (como ahora)
-        if ($is_gift) {
+        if ($is_gift && $has_gift_field) {
             if ($mc_user === '') {
                 wc_add_notice(__('Please enter the recipient\'s Minecraft username (gift).', 'storelinkformc'), 'error');
                 return;
@@ -107,6 +117,9 @@ add_action('woocommerce_checkout_process', function () {
         }
     } else {
         // MODO LIBRE: username obligatorio y verificado
+        if (!$has_username_field) {
+            return;
+        }
         if ($mc_user === '') {
             wc_add_notice(__('Please enter a Minecraft username.', 'storelinkformc'), 'error');
             return;
@@ -135,9 +148,10 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $mc_user = isset($_POST['minecraft_username']) ? sanitize_text_field(wp_unslash($_POST['minecraft_username'])) : '';
     $force   = function_exists('storelinkformc_force_link_enabled') ? storelinkformc_force_link_enabled() : true;
+    $has_gift_field = storelinkformc_checkout_field_enabled('minecraft_gift');
 
     if ($force) {
-        if ($is_gift) {
+        if ($is_gift && $has_gift_field) {
             update_post_meta($order_id, '_minecraft_username', $mc_user);
             update_post_meta($order_id, '_slmc_target_type', 'gift');
         } elseif ($linked) {
@@ -181,5 +195,16 @@ if (!function_exists('storelinkformc_checkout_verify_username')) {
         }
         // PlayerDB responde success:true cuando existe
         return !empty($body['success']);
+    }
+}
+
+if (!function_exists('storelinkformc_checkout_field_enabled')) {
+    function storelinkformc_checkout_field_enabled(string $field): bool {
+        $allowed = get_option('storelinkformc_checkout_fields', []);
+        if (!is_array($allowed) || empty($allowed)) {
+            return true;
+        }
+
+        return in_array($field, $allowed, true);
     }
 }
