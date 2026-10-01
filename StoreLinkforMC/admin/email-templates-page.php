@@ -93,9 +93,12 @@ function storelinkformc_email_templates_page() {
     $body    = get_option('slmc_tpl_link_html', $default_body);
 
     ?>
-    <div class="wrap">
-        <h1><?php esc_html_e('Email Templates', 'storelinkformc'); ?></h1>
-        <p><?php esc_html_e('Customize the email sent when a player requests a verification code.', 'storelinkformc'); ?></p>
+    <div class="wrap storelinkformc-admin">
+        <div class="storelinkformc-admin-header"><div>
+            <span class="storelinkformc-eyebrow"><?php esc_html_e('Customer communication', 'storelinkformc'); ?></span>
+            <h1><?php esc_html_e('Email Templates', 'storelinkformc'); ?></h1>
+            <p class="storelinkformc-admin-subtitle"><?php esc_html_e('Customize the secure email sent when a player requests an account verification code.', 'storelinkformc'); ?></p>
+        </div></div>
 
         <p><strong><?php esc_html_e('Available placeholders:', 'storelinkformc'); ?></strong></p>
         <ul style="list-style: disc; padding-left: 20px;">
@@ -106,7 +109,7 @@ function storelinkformc_email_templates_page() {
             <li><code>{player}</code> – <?php esc_html_e('Minecraft username', 'storelinkformc'); ?></li>
         </ul>
 
-        <form method="post">
+        <form method="post" class="storelinkformc-panel storelinkformc-standalone-form">
             <?php wp_nonce_field('slmc_email_tpl_nonce'); ?>
             <table class="form-table" role="presentation">
                 <tr>
@@ -203,3 +206,15 @@ function storelinkformc_email_templates_page() {
     </script>
     <?php
 }
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ('storelinkformc_page_storelinkformc_email_templates' !== $hook) {
+        return;
+    }
+    wp_enqueue_style(
+        'storelinkformc-admin-pages',
+        plugins_url('../assets/css/admin-pages.css', __FILE__),
+        [],
+        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
+    );
+});

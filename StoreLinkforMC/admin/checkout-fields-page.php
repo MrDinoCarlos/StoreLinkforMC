@@ -39,7 +39,7 @@ function storelinkformc_checkout_fields_page() {
         echo '<div class="updated"><p>' . esc_html__('Settings saved successfully.', 'storelinkformc') . '</p></div>';
     }
 
-    $selected_fields = get_option('storelinkformc_checkout_fields', []);
+    $selected_fields = array_values((array) get_option('storelinkformc_checkout_fields', []));
     $all_fields      = [
         'minecraft_username'   => __('Minecraft Username', 'storelinkformc'),
         'minecraft_gift'       => __('Gift this to another player', 'storelinkformc'),
@@ -109,6 +109,7 @@ function storelinkformc_checkout_fields_page() {
     <div class="wrap storelinkformc-admin">
         <div class="storelinkformc-admin-header">
             <div>
+                <span class="storelinkformc-eyebrow"><?php esc_html_e('Checkout experience', 'storelinkformc'); ?></span>
                 <h1><?php esc_html_e('Checkout Fields', 'storelinkformc'); ?></h1>
                 <p class="storelinkformc-admin-subtitle">
                     <?php esc_html_e('Choose which fields StoreLink should keep visible during checkout when the cart contains synced Minecraft products.', 'storelinkformc'); ?>
@@ -136,13 +137,36 @@ function storelinkformc_checkout_fields_page() {
                         <p><?php esc_html_e('Unchecked fields are hidden for StoreLink synced carts. Leave empty to use WooCommerce defaults.', 'storelinkformc'); ?></p>
                     </div>
                 </div>
-                <div class="storelinkformc-panel-body">
+                <div class="storelinkformc-preset-bar">
+                    <div>
+                        <strong><?php esc_html_e('Quick setup', 'storelinkformc'); ?></strong>
+                        <span><?php esc_html_e('Start with a sensible preset, then fine-tune individual fields.', 'storelinkformc'); ?></span>
+                    </div>
+                    <div class="storelinkformc-preset-actions">
+                        <button type="button" class="button button-primary" data-slmc-preset="digital"><?php esc_html_e('Digital store', 'storelinkformc'); ?></button>
+                        <button type="button" class="button" data-slmc-preset="minimal"><?php esc_html_e('Minecraft only', 'storelinkformc'); ?></button>
+                        <button type="button" class="button" data-slmc-preset="all"><?php esc_html_e('Keep all fields', 'storelinkformc'); ?></button>
+                        <button type="button" class="button" data-slmc-preset="default"><?php esc_html_e('WooCommerce default', 'storelinkformc'); ?></button>
+                    </div>
+                </div>
+                <div class="storelinkformc-info-banner">
+                    <span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
+                    <p><strong><?php esc_html_e('Only affects synchronized carts.', 'storelinkformc'); ?></strong> <?php esc_html_e('Normal WooCommerce orders keep their standard checkout fields. An empty selection also leaves WooCommerce unchanged.', 'storelinkformc'); ?></p>
+                </div>
+                <div class="storelinkformc-panel-body storelinkformc-fields-builder">
                     <?php foreach ($field_groups as $group_label => $group_fields) : ?>
-                        <div class="storelinkformc-section-title"><?php echo esc_html($group_label); ?></div>
-                        <div class="storelinkformc-grid">
+                        <section class="storelinkformc-field-group">
+                            <div class="storelinkformc-field-group-heading">
+                                <div>
+                                    <span class="dashicons <?php echo 'Minecraft' === $group_label ? 'dashicons-admin-users' : ('Billing' === $group_label ? 'dashicons-email-alt' : 'dashicons-location'); ?>" aria-hidden="true"></span>
+                                    <h3><?php echo esc_html($group_label); ?></h3>
+                                </div>
+                                <button type="button" class="button-link" data-slmc-group-toggle><?php esc_html_e('Select group', 'storelinkformc'); ?></button>
+                            </div>
+                            <div class="storelinkformc-grid">
                             <?php foreach ($group_fields as $key) : ?>
                                 <?php if (!isset($all_fields[$key])) continue; ?>
-                                <label class="storelinkformc-field-card">
+                                <label class="storelinkformc-field-card<?php echo in_array($key, $selected_fields, true) ? ' is-selected' : ''; ?>" data-field="<?php echo esc_attr($key); ?>">
                                     <input
                                         type="checkbox"
                                         name="checkout_fields[]"
@@ -150,15 +174,21 @@ function storelinkformc_checkout_fields_page() {
                                         <?php checked(in_array($key, $selected_fields, true)); ?>
                                     >
                                     <span>
-                                        <strong><?php echo esc_html($all_fields[$key]); ?></strong>
+                                        <strong><?php echo esc_html($all_fields[$key]); ?>
+                                            <?php if (in_array($key, ['minecraft_username', 'billing_email'], true)) : ?>
+                                                <em><?php esc_html_e('Recommended', 'storelinkformc'); ?></em>
+                                            <?php endif; ?>
+                                        </strong>
                                         <span><?php echo esc_html($field_notes[$key] ?? ''); ?></span>
                                     </span>
                                 </label>
                             <?php endforeach; ?>
-                        </div>
+                            </div>
+                        </section>
                     <?php endforeach; ?>
                 </div>
                 <div class="storelinkformc-actions">
+                    <span class="storelinkformc-selection-summary"><strong data-slmc-selected-count><?php echo esc_html((string) $selected_count); ?></strong> <?php esc_html_e('fields selected', 'storelinkformc'); ?></span>
                     <?php submit_button(__('Save Settings', 'storelinkformc'), 'primary', 'submit', false); ?>
                 </div>
             </div>
@@ -240,7 +270,7 @@ add_filter('woocommerce_checkout_fields', function ($fields) {
 
 
 // Save the Minecraft username to the order meta
-add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
+add_action('woocommerce_checkout_create_order', function ($order) {
 
     // Opcional: no guardar meta si el carrito no tenía productos sincronizados
     if (!function_exists('storelinkformc_cart_has_synced_products') || !storelinkformc_cart_has_synced_products()) {
@@ -252,47 +282,25 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
     if (isset($_POST['minecraft_username'])) {
         // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $username = sanitize_text_field(wp_unslash($_POST['minecraft_username']));
-        update_post_meta($order_id, '_minecraft_username', $username);
+        $order->update_meta_data('_minecraft_username', $username);
     }
 
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $gift_raw = isset($_POST['minecraft_gift']) ? sanitize_text_field(wp_unslash($_POST['minecraft_gift'])) : '';
     if (!empty($gift_raw)) {
-        update_post_meta($order_id, '_minecraft_gift', 'yes');
+        $order->update_meta_data('_minecraft_gift', 'yes');
     } else {
-        update_post_meta($order_id, '_minecraft_gift', 'no');
+        $order->update_meta_data('_minecraft_gift', 'no');
     }
 });
 
 
 // Show in admin panel order view
 add_action('woocommerce_admin_order_data_after_billing_address', function ($order) {
-    $player = get_post_meta($order->get_id(), '_minecraft_username', true);
+    $player = $order->get_meta('_minecraft_username', true);
     if ($player) {
         echo '<p><strong>' . esc_html__('Minecraft Username:', 'storelinkformc') . '</strong> ' . esc_html($player) . '</p>';
     }
-});
-
-add_action('admin_enqueue_scripts', function ($hook) {
-    if ($hook !== 'storelinkformc_page_storelinkformc_checkout_fields') {
-        return;
-    }
-
-    wp_enqueue_style(
-        'storelinkformc-admin-pages',
-        plugins_url('../assets/css/admin-pages.css', __FILE__),
-        [],
-        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
-    );
-
-    wp_register_script(
-        'storelinkformc-checkout',
-        plugins_url('../assets/js/checkout-fields.js', __FILE__),
-        [],
-        filemtime(plugin_dir_path(__FILE__) . '../assets/js/checkout-fields.js'),
-        true
-    );
-    wp_enqueue_script('storelinkformc-checkout');
 });
 
 // Enforce linking (self-purchase) vs gift + policy
@@ -390,7 +398,7 @@ add_action('woocommerce_checkout_process', function () {
     }
 });
 
-add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
+add_action('woocommerce_checkout_create_order', function ($order) {
     // WooCommerce checkout submission; WooCommerce owns nonce validation here.
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     if (!empty($_POST['minecraft_uuid_resolved'])) {
@@ -403,7 +411,7 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
             substr($raw, 16, 4) . '-' .
             substr($raw, 20);
 
-        update_post_meta($order_id, '_minecraft_uuid', $uuid);
+        $order->update_meta_data('_minecraft_uuid', $uuid);
     }
 }, 20);
 

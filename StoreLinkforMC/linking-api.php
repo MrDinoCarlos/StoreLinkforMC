@@ -7,53 +7,20 @@ if (!defined('ABSPATH')) {
 add_action('rest_api_init', function () {
     register_rest_route('storelinkformc/v1', '/request-link', [
         'methods'  => 'POST',
-        'callback' => function ($request) {
-            $email  = sanitize_email($request->get_param('email'));
-            $player = sanitize_user($request->get_param('player'));
-
-            // Rate limiting per IP (sanitized)
-            $real_ip = '0.0.0.0';
-            $ip_sources = [
-                'HTTP_CF_CONNECTING_IP',
-                'HTTP_X_REAL_IP',
-                'REMOTE_ADDR',
-            ];
-            foreach ($ip_sources as $key) {
-                if (!empty($_SERVER[$key])) {
-                    $real_ip = sanitize_text_field(wp_unslash($_SERVER[$key]));
-                    break;
-                }
-            }
-
-            $ip_key = 'storelinkformc_rate_' . md5($real_ip);
-            if (get_transient($ip_key)) {
-                return new WP_REST_Response(['error' => 'Please wait before requesting another code.'], 429);
-            }
-            set_transient($ip_key, true, 60); // 1 request/minute
-
-            // Token verification
-            $token        = sanitize_text_field($request->get_param('token'));
-            $stored_token = get_option('storelinkformc_api_token');
-            if ($token !== $stored_token) {
-                return new WP_REST_Response(['error' => 'Invalid token'], 403);
-            }
-
-            return storelinkformc_request_link($request);
-        },
-        'permission_callback' => '__return_true', // Handled inside callback
+        'callback' => 'storelinkformc_request_link',
+        'permission_callback' => 'storelinkformc_rest_authorize',
     ]);
 
     register_rest_route('storelinkformc/v1', '/verify-link', [
         'methods'  => 'POST',
-        'callback' => function ($request) {
-            $token        = sanitize_text_field($request->get_param('token'));
-            $stored_token = get_option('storelinkformc_api_token');
-            if ($token !== $stored_token) {
-                return new WP_REST_Response(['error' => 'Invalid token'], 403);
-            }
-            return storelinkformc_verify_link($request);
-        },
-        'permission_callback' => '__return_true',
+        'callback' => 'storelinkformc_verify_link',
+        'permission_callback' => 'storelinkformc_rest_authorize',
+    ]);
+
+    register_rest_route('storelinkformc/v1', '/unlink', [
+        'methods'  => 'POST',
+        'callback' => 'storelinkformc_api_unlink_player',
+        'permission_callback' => 'storelinkformc_rest_authorize',
     ]);
 });
 
@@ -62,6 +29,16 @@ add_action('rest_api_init', function () {
 function storelinkformc_request_link($request) {
     $email  = sanitize_email($request->get_param('email'));
     $player = sanitize_user($request->get_param('player'));
+
+    if (!is_email($email) || !preg_match('/^[A-Za-z0-9_]{3,16}$/', $player)) {
+        return new WP_REST_Response(['error' => 'Invalid email or player'], 400);
+    }
+
+    $rate_key = 'storelinkformc_link_rate_' . hash('sha256', storelinkformc_request_ip() . '|' . strtolower($email));
+    if (get_transient($rate_key)) {
+        return new WP_REST_Response(['error' => 'Please wait before requesting another code.'], 429);
+    }
+    set_transient($rate_key, 1, MINUTE_IN_SECONDS);
 
     // Enforce policy (optional here – pre-check before emailing)
     $policy = get_option('storelinkformc_username_policy', 'premium');
@@ -73,10 +50,6 @@ function storelinkformc_request_link($request) {
                 : 'This site only accepts Mojang (premium) usernames.';
             return new WP_REST_Response(['error' => $msg], 400);
         }
-    }
-
-    if (!is_email($email) || empty($player)) {
-        return new WP_REST_Response(['error' => 'Invalid email or player'], 400);
     }
 
     // === Require that the email belongs to an existing WP user ===
@@ -108,7 +81,7 @@ function storelinkformc_request_link($request) {
     set_transient(
         $key,
         [
-            'code'    => (string) $code,
+            'code_hash' => wp_hash_password((string) $code),
             'player'  => $player,
             'user_id' => $user->ID,
         ],
@@ -131,10 +104,28 @@ function storelinkformc_verify_link($request) {
     $email = sanitize_email($request->get_param('email'));
     $code  = sanitize_text_field($request->get_param('code'));
     $key   = 'storelinkformc_verify_code_' . md5($email);
+    $attempt_key = 'storelinkformc_verify_attempt_' . hash('sha256', strtolower($email) . '|' . storelinkformc_request_ip());
+    $attempts = (int) get_transient($attempt_key);
+    if ($attempts >= 5) {
+        return new WP_REST_Response(['error' => 'Too many attempts. Please request a new code later.'], 429);
+    }
 
     $data = get_transient($key);
-    if (!$data || empty($data['code']) || (string) $data['code'] !== $code) {
+    if (!$data || empty($data['code_hash']) || !wp_check_password($code, $data['code_hash'])) {
+        set_transient($attempt_key, $attempts + 1, 15 * MINUTE_IN_SECONDS);
         return new WP_REST_Response(['error' => 'Invalid or expired code.'], 400);
+    }
+
+    $already_linked = get_users([
+        'meta_key'   => 'minecraft_player', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+        'meta_value' => $data['player'], // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+        'exclude'    => [(int) $data['user_id']],
+        'number'     => 1,
+        'fields'     => 'ids',
+    ]);
+    if ($already_linked) {
+        delete_transient($key);
+        return new WP_REST_Response(['error' => 'This player name is already linked.'], 409);
     }
 
     // Enforce policy (authoritative)
@@ -152,6 +143,7 @@ function storelinkformc_verify_link($request) {
     // Now it’s safe to write
     update_user_meta($data['user_id'], 'minecraft_player', $data['player']);
     delete_transient($key);
+    delete_transient($attempt_key);
 
     $role = get_option('storelinkformc_default_linked_role');
     if ($role && !user_can($data['user_id'], $role)) {
@@ -190,166 +182,216 @@ function storelinkformc_unlink_account($user_id) {
     }
 }
 
-add_action('rest_api_init', function () {
-    register_rest_route('storelinkformc/v1', '/pending', [
-        'methods'  => 'GET',
-        'callback' => 'storelinkformc_api_get_pending',
-        'permission_callback' => function ($request) {
-            $token        = sanitize_text_field($request->get_param('token'));
-            $stored_token = get_option('storelinkformc_api_token');
-            return $token === $stored_token;
-        },
+/**
+ * Unlink the authenticated Minecraft player from its WordPress account.
+ */
+function storelinkformc_api_unlink_player($request) {
+    $player = sanitize_user((string) $request->get_param('player'));
+    if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $player)) {
+        return new WP_REST_Response(['error' => 'Invalid player parameter.'], 400);
+    }
+
+    $users = get_users([
+        'meta_key'   => 'minecraft_player', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+        'meta_value' => $player, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+        'number'     => 1,
+        'fields'     => 'ids',
     ]);
-});
-
-function storelinkformc_api_get_pending($request) {
-    $token  = sanitize_text_field($request->get_param('token'));
-    $player = sanitize_text_field($request->get_param('player'));
-
-    $stored_token = get_option('storelinkformc_api_token');
-    if ($token !== $stored_token) {
-        return new WP_REST_Response(['error' => 'Invalid token'], 403);
+    if (!$users) {
+        return new WP_REST_Response(['error' => 'This Minecraft account is not linked.'], 404);
     }
 
-    if (empty($player)) {
-        return new WP_REST_Response(['error' => 'Missing player parameter'], 400);
-    }
+    storelinkformc_unlink_account((int) $users[0]);
 
-    global $wpdb;
-    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $has_product_id = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'product_id'));
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $has_variation  = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'variation_id'));
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $has_expired    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expired'));
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $has_expires    = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expires_at'));
-    $where_expires = current_time('mysql');
-
-    if ($has_product_id && $has_variation) {
-        if ($has_expired && $has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } elseif ($has_expired) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
-        } elseif ($has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } else {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
-        }
-    } elseif ($has_product_id) {
-        if ($has_expired && $has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } elseif ($has_expired) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
-        } elseif ($has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } else {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
-        }
-    } elseif ($has_variation) {
-        if ($has_expired && $has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } elseif ($has_expired) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
-        } elseif ($has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } else {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
-        }
-    } else {
-        if ($has_expired && $has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0) AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } elseif ($has_expired) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expired IS NULL OR expired = 0)", $player));
-        } elseif ($has_expires) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $player, $where_expires));
-        } else {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $rows = $wpdb->get_results($wpdb->prepare("SELECT id, order_id, item, 0 AS product_id, 0 AS variation_id, amount FROM {$table} WHERE player = %s AND delivered = 0", $player));
-        }
-    }
-
-    return ['success' => true, 'deliveries' => $rows];
+    return new WP_REST_Response([
+        'success' => true,
+        'message' => 'Minecraft account unlinked successfully.',
+        'player'  => $player,
+    ], 200);
 }
 
 add_action('rest_api_init', function () {
+    register_rest_route('storelinkformc/v1', '/pending', [
+        'methods'             => WP_REST_Server::READABLE,
+        'callback'            => 'storelinkformc_api_get_pending',
+        'permission_callback' => 'storelinkformc_rest_authorize',
+    ]);
+    register_rest_route('storelinkformc/v1', '/pending-batch', [
+        'methods'             => WP_REST_Server::CREATABLE,
+        'callback'            => 'storelinkformc_api_get_pending_batch',
+        'permission_callback' => 'storelinkformc_rest_authorize',
+    ]);
     register_rest_route('storelinkformc/v1', '/mark-delivered', [
-        'methods'  => 'POST',
-        'callback' => 'storelinkformc_api_mark_delivered',
-        'permission_callback' => function ($request) {
-            $token        = sanitize_text_field($request->get_param('token'));
-            $stored_token = get_option('storelinkformc_api_token');
-            return $token === $stored_token;
-        },
+        'methods'             => WP_REST_Server::CREATABLE,
+        'callback'            => 'storelinkformc_api_mark_delivered',
+        'permission_callback' => 'storelinkformc_rest_authorize',
     ]);
 });
 
-function storelinkformc_api_mark_delivered($request) {
-    $token = $request->get_param('token');
-    $id    = $request->get_param('id');
+function storelinkformc_rest_authorize($request) {
+    $stored   = (string) get_option('storelinkformc_api_token', '');
+    $provided = (string) $request->get_header('x-storelink-token');
+    $authorization = (string) $request->get_header('authorization');
 
-    if (empty($token) || empty($id)) {
-        return new WP_REST_Response(['error' => 'Missing delivery ID or token'], 400);
+    if (!$provided && preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
+        $provided = trim($matches[1]);
+    }
+    if (!$provided) {
+        $provided = (string) $request->get_param('token'); // v1 client compatibility.
     }
 
-    $token        = sanitize_text_field($token);
-    $id           = (int) $id;
-    $stored_token = get_option('storelinkformc_api_token');
+    if (!$stored || !$provided || !hash_equals($stored, $provided)) {
+        return new WP_Error(
+            'storelinkformc_invalid_token',
+            __('Invalid API token.', 'storelinkformc'),
+            ['status' => 401]
+        );
+    }
+    return true;
+}
 
-    if (!$stored_token || $token !== $stored_token) {
-        return new WP_REST_Response(['error' => 'Invalid token'], 403);
+function storelinkformc_api_get_pending($request) {
+    $player = sanitize_text_field((string) $request->get_param('player'));
+    if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $player)) {
+        return new WP_REST_Response(['error' => 'Invalid player parameter'], 400);
+    }
+    $grouped = storelinkformc_get_pending_for_players([$player], 50);
+    return new WP_REST_Response([
+        'success'    => true,
+        'deliveries' => $grouped[$player] ?? [],
+    ], 200);
+}
+
+function storelinkformc_api_get_pending_batch($request) {
+    $players = $request->get_param('players');
+    if (!is_array($players)) {
+        return new WP_REST_Response(['error' => 'Players must be an array'], 400);
+    }
+
+    $clean = [];
+    foreach (array_slice($players, 0, 100) as $player) {
+        $player = sanitize_text_field((string) $player);
+        if (preg_match('/^[A-Za-z0-9_]{3,16}$/', $player)) {
+            $clean[$player] = $player;
+        }
+    }
+    if (!$clean) {
+        return new WP_REST_Response(['success' => true, 'deliveries' => []], 200);
+    }
+
+    $limit = max(1, min(200, absint($request->get_param('limit') ?: 50)));
+    return new WP_REST_Response([
+        'success'    => true,
+        'deliveries' => storelinkformc_get_pending_for_players(array_values($clean), $limit),
+    ], 200);
+}
+
+function storelinkformc_get_pending_for_players(array $players, int $per_player_limit): array {
+    global $wpdb;
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    $result = array_fill_keys($players, []);
+    $player_keys = [];
+    foreach ($players as $player) {
+        $player_keys[strtolower($player)] = $player;
+    }
+
+    $placeholders = implode(', ', array_fill(0, count($players), '%s'));
+    $maximum_rows = min(2000, count($players) * $per_player_limit);
+    $arguments = array_merge($players, [current_time('mysql'), $maximum_rows]);
+    $sql = "SELECT id, order_id, player, item, product_id, variation_id, amount
+            FROM {$table}
+            WHERE player IN ({$placeholders})
+              AND delivered = 0
+              AND (expired IS NULL OR expired = 0)
+              AND (expires_at IS NULL OR expires_at >= %s)
+            ORDER BY id ASC
+            LIMIT %d";
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $rows = $wpdb->get_results($wpdb->prepare($sql, ...$arguments));
+    foreach ((array) $rows as $row) {
+        $requested = $player_keys[strtolower((string) $row->player)] ?? null;
+        if (null === $requested || count($result[$requested]) >= $per_player_limit) {
+            continue;
+        }
+        unset($row->player);
+        $result[$requested][] = $row;
+    }
+    return $result;
+}
+
+function storelinkformc_api_mark_delivered($request) {
+    $ids = $request->get_param('ids');
+    if (!is_array($ids)) {
+        $ids = [$request->get_param('id')]; // v1 client compatibility.
+    }
+    $ids = array_values(array_unique(array_filter(array_map('absint', array_slice($ids, 0, 200)))));
+    if (!$ids) {
+        return new WP_REST_Response(['error' => 'Missing delivery IDs'], 400);
     }
 
     global $wpdb;
     $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    $placeholders = implode(', ', array_fill(0, count($ids), '%d'));
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $has_expired = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'expired'));
-
-
-    $data    = ['delivered' => 1];
-    $formats = ['%d'];
-
-    if ($has_expired) {
-        // opcional, puedes quitarlo si no quieres tocar expired al entregar
-        $data['expired'] = 0;
-        $formats[] = '%d';
-    }
-
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $updated = $wpdb->update(
-        $table,
-        $data,
-        ['id' => $id, 'delivered' => 0],
-        $formats,
-        ['%d','%d']
-    );
-
-    if ($updated === false) {
+    $order_ids = array_map('absint', $wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT order_id FROM {$table} WHERE id IN ({$placeholders})",
+        ...$ids
+    )));
+    $sql = "UPDATE {$table}
+            SET delivered = 1, expired = 0
+            WHERE delivered = 0 AND id IN ({$placeholders})";
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $updated = $wpdb->query($wpdb->prepare($sql, ...$ids));
+    if (false === $updated) {
         return new WP_REST_Response(['error' => 'Database update failed'], 500);
     }
-
-    if ($updated === 0) {
-        return new WP_REST_Response(['success' => false, 'message' => 'Already delivered or not found'], 200);
+    if ($updated > 0 && $order_ids) {
+        if (function_exists('as_enqueue_async_action')) {
+            as_enqueue_async_action('storelinkformc_complete_delivered_orders', [$order_ids], 'storelinkformc');
+        } elseif (!wp_next_scheduled('storelinkformc_complete_delivered_orders', [$order_ids])) {
+            wp_schedule_single_event(time() + 10, 'storelinkformc_complete_delivered_orders', [$order_ids]);
+        }
     }
+    return new WP_REST_Response([
+        'success' => true,
+        'updated' => (int) $updated,
+    ], 200);
+}
 
+add_action('storelinkformc_complete_delivered_orders', 'storelinkformc_complete_delivered_orders');
+function storelinkformc_complete_delivered_orders($order_ids): void {
+    if (!function_exists('wc_get_order') || !is_array($order_ids)) {
+        return;
+    }
+    global $wpdb;
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    foreach (array_slice(array_unique(array_map('absint', $order_ids)), 0, 200) as $order_id) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $remaining = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE order_id = %d AND delivered = 0 AND (expired IS NULL OR expired = 0)",
+            $order_id
+        ));
+        if ($remaining > 0) {
+            continue;
+        }
+        $order = wc_get_order($order_id);
+        if ($order && in_array($order->get_status(), ['processing', 'on-hold', 'pending'], true)) {
+            $order->update_status('completed', __('All Minecraft deliveries were confirmed.', 'storelinkformc'));
+        }
+    }
+}
 
-    return new WP_REST_Response(['success' => true, 'message' => 'Marked as delivered'], 200);
+function storelinkformc_request_ip(): string {
+    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'] as $source) {
+        if (!empty($_SERVER[$source])) {
+            $candidate = trim((string) wp_unslash($_SERVER[$source]));
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                return $candidate;
+            }
+        }
+    }
+    return '0.0.0.0';
 }
 
 /**

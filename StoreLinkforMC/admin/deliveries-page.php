@@ -175,13 +175,6 @@ function storelinkformc_render_deliveries_page() {
                         }
                     }
                 } elseif ('delete' === $bulk_action) {
-                    if ($bulk_order_id && function_exists('wc_get_order')) {
-                        $order = wc_get_order($bulk_order_id);
-                        if ($order) {
-                            $order->delete(false);
-                        }
-                    }
-
                     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
                     $result = $wpdb->delete($table, ['id' => $bulk_id], ['%d']);
                     if (false !== $result) {
@@ -350,31 +343,8 @@ function storelinkformc_render_deliveries_page() {
                 echo '<div class="updated notice"><p>' . esc_html__('Updated successfully.', 'storelinkformc') . '</p></div>';
             }
 
-            // 🗑 Delete delivery + WooCommerce order
+            // Delete only the bridge record. Store orders are never removed here.
             if (isset($_POST['delete_delivery'])) {
-                // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-                $order_id = (int) $wpdb->get_var(
-                    $wpdb->prepare("SELECT order_id FROM $table WHERE id = %d", $id)
-                );
-                // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
-
-                // Delete WooCommerce order
-                if ($order_id && function_exists('wc_get_order')) {
-                    $order = wc_get_order($order_id);
-                    if ($order) {
-                        $deleted = $order->delete(false); // false = trash
-                        if (is_wp_error($deleted)) {
-                            $notice = sprintf(
-                                /* translators: 1: WooCommerce order ID, 2: error message. */
-                                esc_html__('Could not delete WooCommerce order #%1$d: %2$s', 'storelinkformc'),
-                                (int) $order_id,
-                                $deleted->get_error_message()
-                            );
-                            echo '<div class="notice notice-error"><p>' . esc_html($notice) . '</p></div>';
-                        }
-                    }
-                }
-
                 // Delete delivery row
                 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
                 $deleted_row = $wpdb->delete($table, ['id' => $id], ['%d']);
@@ -387,7 +357,7 @@ function storelinkformc_render_deliveries_page() {
                         ) .
                         '</p></div>';
                 } else {
-                    echo '<div class="updated"><p>' . esc_html__('Delivery record and (if it existed) the WooCommerce order were deleted.', 'storelinkformc') . '</p></div>';
+                    echo '<div class="updated"><p>' . esc_html__('Delivery record deleted. The WooCommerce order was kept.', 'storelinkformc') . '</p></div>';
                 }
             }
         }
@@ -397,53 +367,21 @@ function storelinkformc_render_deliveries_page() {
     $filter_status = isset($_POST['filter_status']) ? sanitize_text_field(wp_unslash($_POST['filter_status'])) : 'all';
     $filter_player = isset($_POST['filter_player']) ? sanitize_text_field(wp_unslash($_POST['filter_player'])) : '';
 
-    // 🚀 Verifica automáticamente pedidos entregados y actualiza su estado si es necesario
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-    $order_ids = $wpdb->get_col("SELECT DISTINCT order_id FROM $table");
-
-    foreach ($order_ids as $order_id) {
-        $order_id = (int) $order_id;
-
-        if ($has_expired_col && $has_expires_col) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $undelivered = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0 AND (expired = 0 OR expired IS NULL) AND (expires_at IS NULL OR expires_at >= %s)", $order_id, current_time('mysql')));
-        } elseif ($has_expired_col) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $undelivered = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0 AND (expired = 0 OR expired IS NULL)", $order_id));
-        } elseif ($has_expires_col) {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $undelivered = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0 AND (expires_at IS NULL OR expires_at >= %s)", $order_id, current_time('mysql')));
-        } else {
-            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            $undelivered = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE order_id = %d AND delivered = 0", $order_id));
-        }
-
-        if (0 === $undelivered && $order_id && function_exists('wc_get_order')) {
-            $order = wc_get_order($order_id);
-            if ($order && in_array($order->get_status(), ['processing', 'on-hold', 'pending'], true)) {
-                $order->update_status(
-                    'completed',
-                    __('✅ Order automatically marked as completed: all deliveries have been sent.', 'storelinkformc')
-                );
-            }
-        }
-    }
-
-    // Query principal de la tabla
+    // Keep the screen responsive on large stores. Filters are applied before the cap.
     if (!empty($filter_player) && in_array($filter_status, ['pending', 'delivered'], true)) {
         $delivered = ('delivered' === $filter_status) ? 1 : 0;
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE delivered = %d AND player LIKE %s ORDER BY timestamp DESC", $delivered, '%' . $wpdb->esc_like($filter_player) . '%'));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE delivered = %d AND player LIKE %s ORDER BY timestamp DESC LIMIT 250", $delivered, '%' . $wpdb->esc_like($filter_player) . '%'));
     } elseif (in_array($filter_status, ['pending', 'delivered'], true)) {
         $delivered = ('delivered' === $filter_status) ? 1 : 0;
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE delivered = %d ORDER BY timestamp DESC", $delivered));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE delivered = %d ORDER BY timestamp DESC LIMIT 250", $delivered));
     } elseif (!empty($filter_player)) {
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE player LIKE %s ORDER BY timestamp DESC", '%' . $wpdb->esc_like($filter_player) . '%'));
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE player LIKE %s ORDER BY timestamp DESC LIMIT 250", '%' . $wpdb->esc_like($filter_player) . '%'));
     } else {
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY timestamp DESC");
+        $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY timestamp DESC LIMIT 250");
     }
 
     $total_count = count($rows);
@@ -473,6 +411,7 @@ function storelinkformc_render_deliveries_page() {
     // ---- Render ----
     echo '<div class="wrap storelinkformc-admin">';
     echo '<div class="storelinkformc-admin-header"><div>';
+    echo '<span class="storelinkformc-eyebrow">' . esc_html__('Live operations', 'storelinkformc') . '</span>';
     echo '<h1>' . esc_html__('Pending Deliveries', 'storelinkformc') . '</h1>';
     echo '<p class="storelinkformc-admin-subtitle">' . esc_html__('Review Minecraft deliveries, update delivery status, and process many records at once with bulk actions.', 'storelinkformc') . '</p>';
     echo '</div><div class="storelinkformc-admin-stats" aria-hidden="true">';
@@ -484,7 +423,7 @@ function storelinkformc_render_deliveries_page() {
 
     echo '<form method="post" class="storelinkformc-panel">';
     wp_nonce_field('storelinkformc_manage_deliveries');
-    echo '<div class="storelinkformc-panel-header"><div><h2>' . esc_html__('Deliveries queue', 'storelinkformc') . '</h2><p>' . esc_html__('Filter, edit, and apply actions to selected deliveries.', 'storelinkformc') . '</p></div></div>';
+    echo '<div class="storelinkformc-panel-header"><div><h2>' . esc_html__('Deliveries queue', 'storelinkformc') . '</h2><p>' . esc_html__('Filter, edit, and apply actions to selected deliveries.', 'storelinkformc') . '</p></div><span class="storelinkformc-live-indicator"><i></i>' . esc_html__('Operational', 'storelinkformc') . '</span></div>';
     echo '<div class="storelinkformc-toolbar">';
     echo '<label>' . esc_html__('Status', 'storelinkformc') . '
             <select name="filter_status">
@@ -494,7 +433,7 @@ function storelinkformc_render_deliveries_page() {
             </select>
         </label>
         <label>' . esc_html__('Player', 'storelinkformc') . '
-            <input type="text" name="filter_player" value="' . esc_attr($filter_player) . '">
+            <input type="search" name="filter_player" value="' . esc_attr($filter_player) . '" placeholder="' . esc_attr__('Minecraft username', 'storelinkformc') . '">
         </label>
         <button class="button button-primary">' . esc_html__('Refresh', 'storelinkformc') . '</button>';
     echo '</div>';
@@ -505,7 +444,7 @@ function storelinkformc_render_deliveries_page() {
             <option value="mark_delivered">' . esc_html__('Mark delivered', 'storelinkformc') . '</option>
             <option value="mark_undelivered">' . esc_html__('Mark undelivered', 'storelinkformc') . '</option>
             <option value="unexpire">' . esc_html__('Un-expire', 'storelinkformc') . '</option>
-            <option value="delete">' . esc_html__('Delete deliveries and orders', 'storelinkformc') . '</option>
+            <option value="delete">' . esc_html__('Delete delivery records', 'storelinkformc') . '</option>
         </select>';
     echo '<button class="button" name="apply_bulk_action" value="1">' . esc_html__('Apply', 'storelinkformc') . '</button>';
     echo '<span class="storelinkformc-muted">' . esc_html__('Use the checkboxes to select multiple deliveries.', 'storelinkformc') . '</span>';
@@ -514,7 +453,7 @@ function storelinkformc_render_deliveries_page() {
     if (empty($rows)) {
         echo '<div class="storelinkformc-panel-body"><div class="storelinkformc-empty">' . esc_html__('No deliveries match the current filters.', 'storelinkformc') . '</div></div>';
     } else {
-        echo '<table class="widefat fixed striped storelinkformc-table"><thead>
+        echo '<div class="storelinkformc-table-scroll"><table class="widefat fixed storelinkformc-table storelinkformc-deliveries-table"><thead>
             <tr>
                 <th class="storelinkformc-check-column"><input type="checkbox" id="storelinkformc-select-all-deliveries"></th>
                 <th>' . esc_html__('ID', 'storelinkformc') . '</th>
@@ -553,20 +492,38 @@ function storelinkformc_render_deliveries_page() {
             echo '<tr>';
             echo '<td><input type="checkbox" class="storelinkformc-delivery-checkbox" name="selected_deliveries[]" value="' . esc_attr($id) . '"></td>';
             echo '<td><span class="storelinkformc-id-pill">' . esc_html((string) $id) . '</span></td>';
-            echo '<td>' . esc_html($row->order_id) . '</td>';
+            $order_url = '';
+            if ($row->order_id && function_exists('wc_get_order')) {
+                $order = wc_get_order((int) $row->order_id);
+                if ($order && method_exists($order, 'get_edit_order_url')) {
+                    $order_url = $order->get_edit_order_url();
+                }
+            }
+            echo '<td>' . ($order_url
+                ? '<a class="storelinkformc-order-link" href="' . esc_url($order_url) . '">#' . esc_html((string) $row->order_id) . '<span class="dashicons dashicons-external"></span></a>'
+                : '#' . esc_html((string) $row->order_id)) . '</td>';
 
             if ($isEditing) {
                 echo '<td><input name="player" value="' . esc_attr($row->player) . '"></td>';
                 echo '<td><input name="item" value="' . esc_attr($row->item) . '"></td>';
                 echo '<td><input name="amount" type="number" value="' . esc_attr($row->amount) . '" min="1" style="width:80px;"></td>';
             } else {
-                echo '<td><strong>' . esc_html($row->player) . '</strong></td>';
-                echo '<td>' . esc_html($row->item) . '</td>';
-                echo '<td>' . esc_html($row->amount) . '</td>';
+                $head_url = 'https://mc-heads.net/avatar/' . rawurlencode((string) $row->player) . '/40';
+                echo '<td><div class="storelinkformc-player storelinkformc-player-compact"><img src="' . esc_url($head_url) . '" width="36" height="36" loading="lazy" alt=""><strong>' . esc_html($row->player) . '</strong></div></td>';
+                echo '<td><div class="storelinkformc-delivery-item"><strong>' . esc_html($row->item) . '</strong>';
+                if (!empty($row->product_id)) {
+                    echo '<span>' . esc_html__('Product', 'storelinkformc') . ' #' . esc_html((string) $row->product_id);
+                    if (!empty($row->variation_id)) echo ' · ' . esc_html__('Variation', 'storelinkformc') . ' #' . esc_html((string) $row->variation_id);
+                    echo '</span>';
+                }
+                echo '</div></td>';
+                echo '<td><span class="storelinkformc-amount">×' . esc_html((string) $row->amount) . '</span></td>';
             }
 
             echo '<td>' . wp_kses($status_html, ['span' => ['class' => true]]) . '</td>';
-            echo '<td><span class="storelinkformc-muted">' . esc_html($row->timestamp) . '</span></td>';
+            $timestamp = strtotime((string) $row->timestamp);
+            $relative = $timestamp ? human_time_diff($timestamp, current_time('timestamp')) : '';
+            echo '<td><span class="storelinkformc-date"><strong>' . esc_html($relative ? sprintf(__('%s ago', 'storelinkformc'), $relative) : (string) $row->timestamp) . '</strong><span>' . esc_html((string) $row->timestamp) . '</span></span></td>';
             echo '<td><div class="storelinkformc-row-actions">';
 
             if ($isEditing) {
@@ -593,7 +550,7 @@ function storelinkformc_render_deliveries_page() {
             echo '</div></td></tr>';
         }
 
-        echo '</tbody></table>';
+        echo '</tbody></table></div>';
     }
 
     echo '</form>';
@@ -610,25 +567,3 @@ function storelinkformc_render_deliveries_page() {
     echo '</form></div></div>';
     echo '</div>';
 }
-
-add_action('admin_enqueue_scripts', function ($hook) {
-    if ($hook !== 'storelinkformc_page_storelinkformc_deliveries') {
-        return;
-    }
-
-    wp_enqueue_style(
-        'storelinkformc-admin-pages',
-        plugins_url('../assets/css/admin-pages.css', __FILE__),
-        [],
-        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
-    );
-
-    wp_register_script(
-        'storelinkformc-deliveries',
-        plugins_url('../assets/js/deliveries.js', __FILE__),
-        [],
-        '1.0.0',
-        true
-    );
-    wp_enqueue_script('storelinkformc-deliveries');
-});

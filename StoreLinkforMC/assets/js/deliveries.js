@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Confirmación al borrar individual
     document.querySelectorAll('button[name="delete_delivery"]').forEach(button => {
         button.addEventListener('click', function (e) {
-            if (!confirm('This will delete the delivery record and its WooCommerce order. Continue?')) {
+            if (!confirm('Delete this delivery record? The WooCommerce order will be kept.')) {
                 e.preventDefault();
             }
         });
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if (action.value === 'delete' && !confirm('This will delete the selected deliveries and their WooCommerce orders. Continue?')) {
+            if (action.value === 'delete' && !confirm('Delete the selected delivery records? WooCommerce orders will be kept.')) {
                 e.preventDefault();
             }
         });

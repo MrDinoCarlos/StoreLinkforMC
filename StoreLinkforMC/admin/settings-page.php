@@ -9,7 +9,7 @@ add_action('admin_init', 'storelinkformc_settings_init');
 function storelinkformc_add_admin_menu() {
     add_menu_page(
         'StoreLinkforMC Settings',
-        'storelinkformc',
+        'StoreLink MC',
         'manage_options',
         'storelinkformc',
         'storelinkformc_options_page',
@@ -225,11 +225,11 @@ function storelinkformc_api_token_render() {
     // Mostrar (o crear si no existe) el token
     $token = get_option('storelinkformc_api_token', '');
     if (!$token) {
-        $token = wp_generate_password(32, false);
+        $token = wp_generate_password(48, false);
         update_option('storelinkformc_api_token', $token);
     }
 
-    echo '<input type="text" id="api-token-field" class="regular-text" readonly value="' . esc_attr($token) . '" style="cursor:pointer;">';
+    echo '<input type="password" id="api-token-field" class="regular-text code" readonly value="' . esc_attr($token) . '" style="cursor:pointer;">';
     echo '<p class="description">' . esc_html__('Click to copy the token. Use this token in your Minecraft plugin config.', 'storelinkformc') . '</p>';
 
     // Formulario: Regenerate Token (admin-post)
@@ -247,8 +247,15 @@ function storelinkformc_api_token_render() {
     echo '</form>';
 }
 
-function storelinkformc_options_page() { ?>
-    <div class="wrap">
+function storelinkformc_options_page() {
+    global $wpdb;
+    $table = esc_sql($wpdb->prefix . 'pending_deliveries');
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    $pending_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE delivered = 0 AND (expired IS NULL OR expired = 0)");
+    $api_ready = (bool) get_option('storelinkformc_api_token', '');
+    $woo_ready = class_exists('WooCommerce');
+    ?>
+    <div class="wrap storelinkformc-admin">
         <?php
         // Avisos SOLO en esta página
         // Read-only redirect notice from admin-post actions.
@@ -266,54 +273,51 @@ function storelinkformc_options_page() { ?>
         }
         ?>
 
-        <h1><?php esc_html_e('StoreLinkforMC Settings', 'storelinkformc'); ?></h1>
+        <div class="storelinkformc-admin-header">
+            <div>
+                <span class="storelinkformc-eyebrow"><?php echo esc_html('StoreLink for Minecraft ' . STORELINKFORMC_VERSION); ?></span>
+                <h1><?php esc_html_e('Store connection', 'storelinkformc'); ?></h1>
+                <p class="storelinkformc-admin-subtitle"><?php esc_html_e('Connect WooCommerce to your Minecraft server, control delivery rules, and check the health of the bridge.', 'storelinkformc'); ?></p>
+            </div>
+            <div class="storelinkformc-admin-stats">
+                <div class="storelinkformc-stat"><strong><?php echo esc_html((string) $pending_count); ?></strong><span><?php esc_html_e('pending', 'storelinkformc'); ?></span></div>
+                <div class="storelinkformc-stat"><strong><?php echo $api_ready ? esc_html__('Ready', 'storelinkformc') : esc_html__('Missing', 'storelinkformc'); ?></strong><span><?php esc_html_e('API token', 'storelinkformc'); ?></span></div>
+                <div class="storelinkformc-stat"><strong><?php echo $woo_ready ? esc_html__('Active', 'storelinkformc') : esc_html__('Inactive', 'storelinkformc'); ?></strong><span>WooCommerce</span></div>
+            </div>
+        </div>
 
-        <?php
-        // 1) Caja de TOKEN, fuera del form principal (tiene sus propios forms admin-post)
-        do_settings_sections('storelinkformc_tokens');
-        ?>
+        <div class="storelinkformc-panel">
+            <div class="storelinkformc-panel-header"><div><h2><?php esc_html_e('Server authentication', 'storelinkformc'); ?></h2><p><?php esc_html_e('Copy this secret into api-token in the Minecraft plugin configuration.', 'storelinkformc'); ?></p></div><span class="storelinkformc-status storelinkformc-status-delivered"><?php esc_html_e('Secured', 'storelinkformc'); ?></span></div>
+            <div class="storelinkformc-panel-body storelinkformc-settings-table"><?php do_settings_sections('storelinkformc_tokens'); ?></div>
+        </div>
 
-        <hr/>
-
-        <h2><?php esc_html_e('Options', 'storelinkformc'); ?></h2>
-        <form method="post" action="options.php">
-            <?php
-            // 2) Form principal SOLO para opciones (policy, etc.)
-            settings_fields('storelinkformc_settings');
-            do_settings_sections('storelinkformc_settings');
-            submit_button(__('Save Settings', 'storelinkformc'));
-            ?>
+        <form method="post" action="options.php" class="storelinkformc-panel">
+            <div class="storelinkformc-panel-header"><div><h2><?php esc_html_e('Delivery and account rules', 'storelinkformc'); ?></h2><p><?php esc_html_e('Choose how customers identify their Minecraft account and how long rewards remain available.', 'storelinkformc'); ?></p></div></div>
+            <div class="storelinkformc-panel-body storelinkformc-settings-table">
+                <?php settings_fields('storelinkformc_settings'); do_settings_sections('storelinkformc_settings'); ?>
+            </div>
+            <div class="storelinkformc-actions"><?php submit_button(__('Save Settings', 'storelinkformc'), 'primary', 'submit', false); ?></div>
         </form>
 
-        <h2><?php esc_html_e('Maintenance', 'storelinkformc'); ?></h2>
-
-        <form method="post" class="storelinkformc-form-maintenance-db" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-            <?php wp_nonce_field('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce'); ?>
-            <input type="hidden" name="action" value="storelinkformc_rebuild_pending">
-            <p>
-                <button type="submit" class="button button-primary">🛠️ <?php esc_html_e('Create/Fix tables (DB)', 'storelinkformc'); ?></button>
-            </p>
-            <p class="description">
-                <?php esc_html_e('Run dbDelta to (re)create the pending deliveries table.', 'storelinkformc'); ?>
-            </p>
-        </form>
-
-        <form method="post" class="storelinkformc-form-maintenance-checkout" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-            <?php wp_nonce_field('storelinkformc_force_checkout_action', 'storelinkformc_force_checkout_nonce'); ?>
-            <input type="hidden" name="action" value="storelinkformc_force_checkout_shortcode">
-            <p>
-                <button type="submit" class="button">🔁 <?php esc_html_e('Force Classic Checkout (shortcode)', 'storelinkformc'); ?></button>
-            </p>
-            <p class="description">
-                <?php
-                printf(
-                    /* translators: %s is the WooCommerce checkout shortcode. */
-                    esc_html__('Replaces the content of the Checkout page with %s.', 'storelinkformc'),
-                    '<code>[woocommerce_checkout]</code>'
-                );
-                ?>
-            </p>
-        </form>
+        <div class="storelinkformc-panel">
+            <div class="storelinkformc-panel-header"><div><h2><?php esc_html_e('Maintenance', 'storelinkformc'); ?></h2><p><?php esc_html_e('Repair the delivery schema or switch a legacy checkout page when troubleshooting.', 'storelinkformc'); ?></p></div></div>
+            <div class="storelinkformc-panel-body storelinkformc-maintenance-grid">
+                <form method="post" class="storelinkformc-control-card storelinkformc-form-maintenance-db" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php wp_nonce_field('storelinkformc_rebuild_table_action', 'storelinkformc_rebuild_table_nonce'); ?>
+                    <input type="hidden" name="action" value="storelinkformc_rebuild_pending">
+                    <h2><?php esc_html_e('Database schema', 'storelinkformc'); ?></h2>
+                    <p><?php esc_html_e('Create missing columns and performance indexes without deleting deliveries.', 'storelinkformc'); ?></p>
+                    <button type="submit" class="button button-primary"><?php esc_html_e('Repair delivery table', 'storelinkformc'); ?></button>
+                </form>
+                <form method="post" class="storelinkformc-control-card storelinkformc-form-maintenance-checkout" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <?php wp_nonce_field('storelinkformc_force_checkout_action', 'storelinkformc_force_checkout_nonce'); ?>
+                    <input type="hidden" name="action" value="storelinkformc_force_checkout_shortcode">
+                    <h2><?php esc_html_e('Legacy checkout', 'storelinkformc'); ?></h2>
+                    <p><?php esc_html_e('Replace the Checkout page content with the WooCommerce classic shortcode.', 'storelinkformc'); ?></p>
+                    <button type="submit" class="button"><?php esc_html_e('Use classic checkout', 'storelinkformc'); ?></button>
+                </form>
+            </div>
+        </div>
 
     </div>
 <?php }
@@ -323,6 +327,13 @@ function storelinkformc_enqueue_admin_scripts($hook) {
     if ($hook !== 'toplevel_page_storelinkformc') {
         return;
     }
+
+    wp_enqueue_style(
+        'storelinkformc-admin-pages',
+        plugins_url('../assets/css/admin-pages.css', __FILE__),
+        [],
+        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
+    );
 
     // Ruta correcta al JS desde admin/settings-page.php -> ../assets/js/admin.js
     $rel      = '../assets/js/admin.js';
@@ -419,7 +430,7 @@ add_action('admin_post_storelinkformc_regen_token', function () {
     }
     check_admin_referer('storelinkformc_token_action', 'storelinkformc_token_nonce');
 
-    update_option('storelinkformc_api_token', wp_generate_password(32, false));
+    update_option('storelinkformc_api_token', wp_generate_password(48, false));
 
     wp_safe_redirect(
         add_query_arg(

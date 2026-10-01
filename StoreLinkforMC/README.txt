@@ -3,9 +3,10 @@ Contributors: mrdinocarlos
 Donate link: https://buymeacoffee.com/mrdino
 Tags: minecraft, woocommerce, delivery, game, shop
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.0.36
+Requires Plugins: woocommerce
+Stable tag: 2.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,6 +63,34 @@ The **Settings** page provides:
 
 
 == Changelog ==
+
+= Version 2.0.2 =
+
+- Fixed the fatal redeclaration error when WordPress reactivates an uploaded update while the legacy plugin is still loaded.
+- Added a minimal bootstrap loader so future upgrades can safely replace older runtime code.
+- Added a legacy-directory transition package tested as an in-place update from 1.0.36 on WordPress 7.1.2.
+
+= Version 2.0.1 =
+
+- Fixed update packaging so WordPress recognizes and replaces legacy StoreLink installations.
+- Added a professional Linked Profiles screen with Minecraft avatars, account details, search, pagination, and safe unlink actions.
+- Added the authenticated Minecraft unlink endpoint used by `/wsl unlink confirm`.
+- Rebuilt the Deliveries and Checkout Fields experiences with reliable asset loading, responsive layouts, presets, clearer statuses, and safer actions.
+- Delivery deletion now keeps the WooCommerce order intact.
+
+= Version 2.0.0 =
+
+- Added a batch delivery API so one Minecraft poll can retrieve deliveries for all online players.
+- Added batch delivery confirmations and background WooCommerce order completion.
+- Added composite database indexes for fast player, delivery-state, and order lookups.
+- Removed schema inspection queries from every delivery fetch and every order transition.
+- Added constant-time token verification with support for Authorization and X-StoreLink-Token headers.
+- Moved API tokens out of request URLs for the 2.0 Minecraft client while retaining legacy parameter support.
+- Added request throttling after authentication and hashed verification-code storage.
+- Added HPOS and Checkout Blocks compatibility declarations and migrated order metadata access to WooCommerce order APIs.
+- Added a redesigned settings dashboard with connection status, delivery counters, responsive panels, and safer token presentation.
+- Limited the delivery admin table to the latest 250 matching rows and removed its unbounded N+1 order scan.
+- Updated compatibility metadata for WordPress 7.1.2, WooCommerce, and PHP 8.1+.
 
 = Version 1.0.36 =
 

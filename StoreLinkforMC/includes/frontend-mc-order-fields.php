@@ -134,7 +134,7 @@ add_action('woocommerce_checkout_process', function () {
 /**
  * Guardar metadatos del pedido.
  */
-add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
+add_action('woocommerce_checkout_create_order', function ($order) {
     // Do not store Minecraft meta if there are no synced products
     if (!function_exists('storelinkformc_cart_has_synced_products') || !storelinkformc_cart_has_synced_products()) {
         return;
@@ -152,19 +152,19 @@ add_action('woocommerce_checkout_update_order_meta', function ($order_id) {
 
     if ($force) {
         if ($is_gift && $has_gift_field) {
-            update_post_meta($order_id, '_minecraft_username', $mc_user);
-            update_post_meta($order_id, '_slmc_target_type', 'gift');
+            $order->update_meta_data('_minecraft_username', $mc_user);
+            $order->update_meta_data('_slmc_target_type', 'gift');
         } elseif ($linked) {
-            update_post_meta($order_id, '_minecraft_username', $linked);
-            update_post_meta($order_id, '_slmc_target_type', 'linked');
+            $order->update_meta_data('_minecraft_username', $linked);
+            $order->update_meta_data('_slmc_target_type', 'linked');
         } else {
-            delete_post_meta($order_id, '_minecraft_username');
-            delete_post_meta($order_id, '_slmc_target_type');
+            $order->delete_meta_data('_minecraft_username');
+            $order->delete_meta_data('_slmc_target_type');
         }
     } else {
         // MODO LIBRE: siempre manual_username
-        update_post_meta($order_id, '_minecraft_username', $mc_user);
-        update_post_meta($order_id, '_slmc_target_type', 'manual_username');
+        $order->update_meta_data('_minecraft_username', $mc_user);
+        $order->update_meta_data('_slmc_target_type', 'manual_username');
     }
 }, 10, 1);
 

@@ -71,13 +71,14 @@ function storelinkformc_cdn_cache_page() {
     $tok  = get_option('storelinkformc_cf_api_token', '');
 
     ?>
-    <div class="wrap">
-        <h1><?php esc_html_e('CDN & Cache', 'storelinkformc'); ?></h1>
-        <p>
-            <?php esc_html_e('Configure Cloudflare to bypass cache on StoreLinkforMC REST endpoints.', 'storelinkformc'); ?>
-        </p>
+    <div class="wrap storelinkformc-admin">
+        <div class="storelinkformc-admin-header"><div>
+            <span class="storelinkformc-eyebrow"><?php esc_html_e('Edge configuration', 'storelinkformc'); ?></span>
+            <h1><?php esc_html_e('CDN & Cache', 'storelinkformc'); ?></h1>
+            <p class="storelinkformc-admin-subtitle"><?php esc_html_e('Keep live delivery endpoints out of page caches and configure the Cloudflare bypass rule.', 'storelinkformc'); ?></p>
+        </div></div>
 
-        <form method="post">
+        <form method="post" class="storelinkformc-panel storelinkformc-standalone-form">
             <?php wp_nonce_field('storelinkformc_cf_settings'); ?>
             <table class="form-table" role="presentation">
                 <tr>
@@ -138,3 +139,15 @@ function storelinkformc_cdn_cache_page() {
     </div>
     <?php
 }
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ('storelinkformc_page_storelinkformc_cdn_cache' !== $hook) {
+        return;
+    }
+    wp_enqueue_style(
+        'storelinkformc-admin-pages',
+        plugins_url('../assets/css/admin-pages.css', __FILE__),
+        [],
+        filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin-pages.css')
+    );
+});
